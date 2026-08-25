@@ -1,0 +1,18 @@
+[package]
+name = "hot-macro"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+proc-macro = true
+path = "lib.rs"
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full", "fold"] }
+
+[features]
+default = []
+prod = []
+lib = []
