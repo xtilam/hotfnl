@@ -46,7 +46,6 @@ macro_rules! use_local_event {
 macro_rules! use_hot {
   () => {
     hotfnl::if_hot! {
-
       pub mod hot {
         #[derive(Debug)]
         pub struct HotFn {
@@ -55,11 +54,11 @@ macro_rules! use_hot {
           pub file_name: &'static str,
         }
       }
-      inventory::collect!(hot::HotFn);
+      hotfnl::inventory::collect!(hot::HotFn);
       #[unsafe(no_mangle)]
       pub extern "C" fn hrl_get_functions(lib: std::sync::Arc<std::sync::RwLock<hotfnl::HotLib>>) -> Vec<hotfnl::HotFn> {
         let mut list_fn: Vec<hotfnl::HotFn> = vec![];
-        inventory::iter::<hot::HotFn>().for_each(|f| {
+        hotfnl::inventory::iter::<hot::HotFn>().for_each(|f| {
           list_fn.push(hotfnl::HotFn {
             file_name: f.file_name,
             fn_name: f.fn_name,

@@ -14,7 +14,6 @@ fn main() -> Result<()> {
   hotfnl::watch!(watch("./").recursive("../../src"));
   hotfnl::run!();
   enable_raw_mode()?;
-
   execute!(std::io::stdout(), crossterm::terminal::EnterAlternateScreen)?;
   let app = App::default();
   let mut tui = Tui::new()?;
@@ -54,6 +53,7 @@ impl RComponent for App {
       _ => {}
     }
   }
+
   #[hot_method]
   fn render(&self, frame: &mut Frame) {
     use ratatui::prelude::*;
@@ -62,7 +62,7 @@ impl RComponent for App {
       .title(
         Span::from(format!("Counter: {}", 123))
           .bold()
-          // .underlined()
+          .underlined()
           .fg(Color::Yellow),
       )
       .borders(ratatui::widgets::Borders::ALL);
@@ -71,21 +71,6 @@ impl RComponent for App {
         .block(block)
         .alignment(Alignment::Center),
       size,
-    );
-    frame.render_widget(
-      Paragraph::new(format!("Counter: hello! {}", self.counter))
-        .block(
-          Block::default()
-            .title("Counters")
-            .borders(ratatui::widgets::Borders::ALL),
-        )
-        .alignment(Alignment::Center),
-      ratatui::layout::Rect {
-        x: size.x + 2,
-        y: size.y + 2,
-        width: size.width - 4,
-        height: size.height - 4,
-      },
     );
   }
 }

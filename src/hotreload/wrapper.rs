@@ -25,8 +25,11 @@ pub fn app(data_path: &str) {
 fn run_app(data: HotProjectStore) {
   let project = data.project;
   let version_file = project.files().lib().lib_version_txt_path();
-  project.rebuild().unwrap();
   let mut app_version = project.read_version();
+  print_section(&format!(
+    "Run cargo run --bin {} -- [--watch/-w] to rebuild on change",
+    project.files().bin_name()
+  ));
   loop {
     project
       .bin_target_command()
@@ -39,7 +42,8 @@ fn run_app(data: HotProjectStore) {
         child.wait().ok()?;
         Some(())
       });
-    println!("Application exited, waiting for changes...");
+
+    print_section("Application exited, waiting for changes...");
 
     let mut watcher = FileWatcher::new();
     watcher.add(version_file.clone(), false);
@@ -63,8 +67,9 @@ fn run_watch(data: HotProjectStore) {
   watch_src.files = data.watch_src;
   let (_, src_change_rx) = watch_src.new_channel();
   watch_src.run();
-  let mut is_src_changed = true;
+  let mut is_src_changed = false;
   let mut rebuild_task: Option<Child> = None;
+  project.clone_lib();
 
   loop {
     bselect!(
@@ -84,7 +89,6 @@ fn run_watch(data: HotProjectStore) {
             child.wait().ok();
             continue;
           };
-
           print_section("REBUILDING...");
           rebuild_task = project
             .rebuild_command()
@@ -106,7 +110,7 @@ fn run_watch(data: HotProjectStore) {
   }
 }
 
-fn print_section(title: &str) {
+pub fn print_section(title: &str) {
   static LINE: &str = "==============================";
   print!("{}\r\n{}\r\n{}\r\n", LINE, title, LINE);
 }

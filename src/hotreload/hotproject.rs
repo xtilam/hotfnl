@@ -8,11 +8,11 @@ use std::{env::args, path::PathBuf};
 
 use crate::hotreload::fs_utils::clean_path;
 use crate::{
-  HotLib,
   hotreload::{
     fs_utils::{bin_name, link_file, write_file},
     hotproject_files::HotProjectFiles,
   },
+  HotLib,
 };
 
 #[derive(Default, Serialize, Deserialize, Debug, Clone)]
@@ -53,7 +53,7 @@ impl HotProject {
     self.is_workspace = self.root_dir != self.workspace_dir;
   }
   pub fn write_cargo_workspace(&self) -> Result<()> {
-    use toml::{Value, from_str};
+    use toml::{from_str, Value};
     let mut cargo: Value = {
       let content = std::fs::read_to_string(self.workspace_dir.join("Cargo.toml"))?;
       from_str(&content).unwrap()
@@ -62,7 +62,17 @@ impl HotProject {
     cargo.as_table_mut().map(|t| {
       t.remove("lib");
       t.remove("bin");
+      t.get_mut("package")
+        .and_then(|v| v.as_table_mut())
+        .map(|v| {
+          let name = v.get("name");
+          v.insert(
+            "name".into(),
+            format!("hotfnl_{}", name.unwrap().as_str().unwrap()).into(),
+          );
+        });
     });
+
     cargo
       .get_mut("workspace")
       .and_then(|v| v.get_mut("members"))
@@ -74,7 +84,7 @@ impl HotProject {
     cargo
       .get_mut("workspace")
       .and_then(|v| v.get_mut("dependencies"))
-      .and_then(|v| v.is_table().then(|| v.as_table_mut().unwrap()))
+      .and_then(|v| v.as_table_mut())
       .and_then(|v| {
         Some(v.iter_mut().for_each(|item| {
           item.1.get_mut("path").and_then(|v| {
@@ -120,7 +130,7 @@ impl HotProject {
     Ok(())
   }
   pub fn write_cargo_toml(&self) -> Result<()> {
-    use toml::{Value, from_str, map::Map};
+    use toml::{from_str, map::Map, Value};
     let mut cargo: Value = {
       let content = std::fs::read_to_string(self.root_dir.join("Cargo.toml"))?;
       from_str(&content).unwrap()

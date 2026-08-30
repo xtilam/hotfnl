@@ -6,14 +6,14 @@ mod hotlib;
 mod hotproject;
 mod watch_task;
 mod wrapper;
-use std::{os::unix::process::CommandExt, sync};
+use std::{env::args, os::unix::process::CommandExt, process::Command, sync};
 mod hotproject_files;
 mod macro_utils;
 
 use anyhow::Result;
-pub use event::{HotLibEvent, EventCallbackList};
+pub use event::{EventCallbackList, HotLibEvent};
 pub use hotfn::HotFn;
-pub use hotlib::{HotLib, PatchErr, get_fn_idx, get_fn_list};
+pub use hotlib::{get_fn_idx, get_fn_list, HotLib, PatchErr};
 pub use hotproject::HotProjectWatcherConfig;
 pub use wrapper::*;
 
@@ -41,7 +41,21 @@ pub fn run() -> Result<()> {
 }
 
 fn hot_run() -> Result<()> {
-  let _ = HotLib::get_instance().project.wrapper_command(None).exec();
+  print_section("Building hot project...");
+  HotLib::get_instance()
+    .project
+    .rebuild_command()
+    .spawn()?
+    .wait()?;
+  let _ = Command::new(
+    HotLib::get_instance_mut()
+      .project
+      .files()
+      .wrapper()
+      .bin_path(),
+  )
+  .args(args().skip(1))
+  .exec();
   Ok(())
 }
 

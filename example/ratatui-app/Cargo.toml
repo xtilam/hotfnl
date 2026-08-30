@@ -7,14 +7,13 @@ edition = "2024"
 anyhow.workspace = true
 crossbeam-channel.workspace = true
 crossterm.workspace = true
-hotfnl.workspace = true
-inventory = { workspace = true, optional = true }
-ratatui.workspace = true
+hotfnl = { version = "0.1.0", path = "../../" }
+ratatui = "0.30.2"
 
 [features]
-default = ["hotfnl/default", "dep:inventory"]
+default = ["hotfnl/default"]
 prod = ["hotfnl/prod"]
 
 [[bin]]
 name = "ratatui"
-path = "./rapp.rs"
+path = "./main.rs"

@@ -44,7 +44,7 @@ pub fn hot_main(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #[allow(dead_code)]
         #vis #sig {
           {
-            let list_fn: Vec<hotfnl::HotFn> = inventory::iter::<hot::HotFn>
+            let list_fn: Vec<hotfnl::HotFn> = hotfnl::inventory::iter::<hot::HotFn>
               .into_iter()
               .map(|f| hotfnl::HotFn {
                 file_name: f.file_name,
@@ -142,7 +142,7 @@ pub fn hot_fn(attr: TokenStream, item: TokenStream) -> TokenStream {
           fn cb(#(#arg_names: #arg_types),*) -> #ret #body
           static IDX: LazyLock<u16> = LazyLock::new(|| hotfnl::get_fn_idx(FN_NAME, FILE_NAME));
           let callback_list = hotfnl::get_fn_list::<fn(#(#arg_types),*) -> #ret>();
-          inventory::submit! {
+          hotfnl::inventory::submit! {
             hot::HotFn {
               func: unsafe { std::mem::transmute(cb as *const()) },
               fn_name: FN_NAME,
@@ -352,7 +352,7 @@ pub fn hot_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         static FILE_NAME: &'static str = file!();
         static IDX: LazyLock<u16> = LazyLock::new(|| hotfnl::get_fn_idx(FN_NAME, FILE_NAME));
         let callback_list = hotfnl::get_fn_list::<fn(#(#args_types),*) -> #ret>();
-        inventory::submit! {
+        hotfnl::inventory::submit! {
           hot::HotFn {
             func: unsafe { std::mem::transmute(#mm_static as *const()) },
             fn_name: FN_NAME,
