@@ -1,5 +1,5 @@
 mod macros;
-pub use hot_macro::*;
+pub use hotfnl_proc_macro::*;
 
 #[cfg(not(feature = "prod"))]
 mod hotreload;

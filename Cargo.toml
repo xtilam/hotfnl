@@ -17,7 +17,7 @@ notify = { version = "8.2.0", optional = true }
 toml = { version = "1.1.4", optional = true }
 anyhow = { version = "1.0.104" }
 serde = { version = "1.0.229", optional = true, features = ["derive"] }
-hot-macro = { version = "0.1.0", path = "hot-macro", optional = true }
+hotfnl-proc-macro= { version = "0.1.0", path = "hot-macro", optional = true }
 paste = "1.0.15"
 crossbeam-channel = { version = "0.5.16", optional = true }
 
@@ -29,7 +29,7 @@ default = [
   "dep:toml",
   "dep:serde",
   "dep:crossbeam-channel",
-  "hot-macro/default",
+  "hotfnl-proc-macro/default",
 ]
 
-prod = ["hot-macro/prod"]
+prod = ["hotfnl-proc-macro/prod"]

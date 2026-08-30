@@ -134,27 +134,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 
 [[package]]
-name = "hot-macro"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
 name = "hotfnl"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "crossbeam-channel",
  "crossterm",
- "hot-macro",
+ "hotfnl-proc-macro",
  "libloading",
  "notify",
  "paste",
  "serde",
  "toml",
+]
+
+[[package]]
+name = "hotfnl-proc-macro"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]

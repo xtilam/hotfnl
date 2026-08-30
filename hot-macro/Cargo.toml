@@ -1,7 +1,12 @@
 [package]
-name = "hot-macro"
+name = "hotfnl-proc-macro"
 version = "0.1.0"
 edition = "2024"
+authors = ["ztilam60@gmail.com"]
+description = "Proc macro for hotfnl"
+license = "MIT"
+repository = "https://github.com/xtilam/hotfnl"
+
 
 [lib]
 proc-macro = true
