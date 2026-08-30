@@ -1,6 +1,7 @@
 use anyhow::Result;
 use std::{
-  hash::{DefaultHasher, Hash, Hasher}, path::{Component, Path, PathBuf},
+  hash::{DefaultHasher, Hash, Hasher},
+  path::{Component, Path, PathBuf},
 };
 
 pub fn clean_path(path: &Path) -> PathBuf {
@@ -48,3 +49,7 @@ pub fn link_file(src: &PathBuf, dst: &PathBuf) -> Result<()> {
   std::os::unix::fs::symlink(src, dst)?;
   Ok(())
 }
+
+// pub fn path_to_string(path: &PathBuf) -> String {
+//   path.to_str().unwrap().to_string()
+// }

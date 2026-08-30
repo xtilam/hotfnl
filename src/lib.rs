@@ -1,12 +1,31 @@
-
-
+mod macros;
 pub use hot_macro::*;
+
 #[cfg(not(feature = "prod"))]
 mod hotreload;
 #[cfg(not(feature = "prod"))]
 pub use hotreload::*;
 
+#[cfg(not(feature = "prod"))]
+#[macro_export]
+macro_rules! if_hot {
+  ($($el:tt)*) => { $($el)* };
+}
+
+#[cfg(not(feature = "prod"))]
+#[macro_export]
+macro_rules! if_prod {
+  ($($el:tt)*) => {};
+}
+
 #[cfg(feature = "prod")]
-mod prod;
+#[macro_export]
+macro_rules! if_hot {
+  ($($el:tt)*) => {};
+}
+
 #[cfg(feature = "prod")]
-pub use prod::*;
+#[macro_export]
+macro_rules! if_prod{
+  ($($el:tt)*) => { $($el)* };
+}
