@@ -53,7 +53,7 @@ impl HotProject {
     self.is_workspace = self.root_dir != self.workspace_dir;
   }
   pub fn write_cargo_workspace(&self) -> Result<()> {
-    use toml::{Value, from_str, map::Map};
+    use toml::{Value, from_str};
     let mut cargo: Value = {
       let content = std::fs::read_to_string(self.workspace_dir.join("Cargo.toml"))?;
       from_str(&content).unwrap()
@@ -70,7 +70,6 @@ impl HotProject {
         v.is_array()
           .then(|| *v = toml::Value::Array(vec![format!("./{}", self.files().bin_name()).into()]))
       });
-
 
     cargo
       .get_mut("workspace")
