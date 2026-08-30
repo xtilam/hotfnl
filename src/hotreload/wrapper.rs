@@ -97,7 +97,7 @@ fn run_watch(data: HotProjectStore) {
 
         if let Some(child) = rebuild_task.as_mut() {
           if let Ok(Some(status)) = child.try_wait() {
-            if status.success() {}
+            status.success().then(|| project.clone_lib());
             rebuild_task.take();
           }
         }

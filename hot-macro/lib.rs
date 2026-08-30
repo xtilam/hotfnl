@@ -21,6 +21,47 @@ macro_rules! token_unwrap {
   }};
 }
 
+
+#[proc_macro_attribute]
+pub fn hot_main(_attr: TokenStream, item: TokenStream) -> TokenStream {
+  #[cfg(feature = "prod")]
+  return item;
+  #[cfg(not(feature = "prod"))]
+  {
+    use proc_macro::TokenStream;
+    use quote::quote;
+    use syn::{ItemFn, parse_macro_input};
+    let (is_hot_project, env) = std::env::var("HOT_PROJECT_DIR")
+      .map(|env| (true, quote! {#env}))
+      .unwrap_or((false, quote! {env!("CARGO_MANIFEST_DIR")}));
+    let input = parse_macro_input!(item as ItemFn);
+    let vis = &input.vis;
+    let sig = &input.sig;
+    let body = &input.block;
+    let expanded = {
+      quote! {
+        hotfnl::use_hot!();
+        #[allow(dead_code)]
+        #vis #sig {
+          {
+            let list_fn: Vec<hotfnl::HotFn> = inventory::iter::<hot::HotFn>
+              .into_iter()
+              .map(|f| hotfnl::HotFn {
+                file_name: f.file_name,
+                fn_name: f.fn_name,
+                func: f.func,
+                ptr: None,
+              })
+              .collect();
+            hotfnl::boot(#is_hot_project, list_fn, file!(), #env);
+          }
+          #body
+        }
+      }
+    };
+    TokenStream::from(expanded)
+  }
+}
 #[proc_macro_attribute]
 pub fn hot_fn(attr: TokenStream, item: TokenStream) -> TokenStream {
   #[cfg(feature = "prod")]
@@ -117,47 +158,6 @@ pub fn hot_fn(attr: TokenStream, item: TokenStream) -> TokenStream {
   }
 }
 
-#[proc_macro_attribute]
-pub fn hot_main(_attr: TokenStream, item: TokenStream) -> TokenStream {
-  #[cfg(feature = "prod")]
-  return item;
-  #[cfg(not(feature = "prod"))]
-  {
-    use proc_macro::TokenStream;
-    use quote::quote;
-    use syn::{ItemFn, parse_macro_input};
-
-    let (is_hot_project, env) = std::env::var("HOT_PROJECT_DIR")
-      .map(|env| (true, quote! {#env}))
-      .unwrap_or((false, quote! {env!("CARGO_MANIFEST_DIR")}));
-    let input = parse_macro_input!(item as ItemFn);
-    let vis = &input.vis;
-    let sig = &input.sig;
-    let body = &input.block;
-    let expanded = {
-      quote! {
-        hotfnl::use_hot!();
-        #[allow(dead_code)]
-        #vis #sig {
-          {
-            let list_fn: Vec<hotfnl::HotFn> = inventory::iter::<hot::HotFn>
-              .into_iter()
-              .map(|f| hotfnl::HotFn {
-                file_name: f.file_name,
-                fn_name: f.fn_name,
-                func: f.func,
-                ptr: None,
-              })
-              .collect();
-            hotfnl::boot(#is_hot_project, list_fn, file!(), #env);
-          }
-          #body
-        }
-      }
-    };
-    TokenStream::from(expanded)
-  }
-}
 
 #[proc_macro_attribute]
 pub fn hot_impl(attr: TokenStream, item: TokenStream) -> TokenStream {

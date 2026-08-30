@@ -8,7 +8,6 @@ mod watch_task;
 mod wrapper;
 use std::{os::unix::process::CommandExt, sync};
 mod hotproject_files;
-mod log;
 mod macro_utils;
 
 use anyhow::Result;

@@ -1,14 +1,11 @@
+use crate::tui::{RComponent, Tui, TuiAppAction};
 use anyhow::Result;
 use crossterm::event::KeyEvent;
 use crossterm::execute;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use hotfnl::{hot_impl, hot_main, hot_method};
-
 use ratatui::Frame;
 use ratatui::widgets::{Block, Paragraph};
-
-use crate::tui::{RComponent, Tui, TuiAppAction};
-
 mod macro_utils;
 mod tui;
 
@@ -17,6 +14,7 @@ fn main() -> Result<()> {
   hotfnl::watch!(watch("./").recursive("../../src"));
   hotfnl::run!();
   enable_raw_mode()?;
+
   execute!(std::io::stdout(), crossterm::terminal::EnterAlternateScreen)?;
   let app = App::default();
   let mut tui = Tui::new()?;
@@ -64,7 +62,7 @@ impl RComponent for App {
       .title(
         Span::from(format!("Counter: {}", 123))
           .bold()
-          .underlined()
+          // .underlined()
           .fg(Color::Yellow),
       )
       .borders(ratatui::widgets::Borders::ALL);

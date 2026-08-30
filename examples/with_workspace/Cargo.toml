@@ -1,0 +1,14 @@
+[package]
+name = "no_workspace"
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+
+[[bin]]
+name = "nw"
+path = "main.rs"
+
+[dependencies]
+hotfnl = { version = "0.1.0", path = "../.." }
+inventory = "0.3.24"

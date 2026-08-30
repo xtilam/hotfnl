@@ -56,6 +56,7 @@ use_prefix!(
         .to_string()
     },
   },
+  [workspace, HotWorkspace],
   [src, HotSrc],
   [data, HotData],
   [wrapper, HotWrapperBin],
@@ -66,7 +67,13 @@ use_prefix!(
 use_prefix!(HotSrc {
   cargo_toml: |self: &Self| -> PathBuf { self.project.hot_dir.join("Cargo.toml") },
   cargo_lock: |self: &Self| -> PathBuf { self.project.hot_dir.join("Cargo.lock") },
-  cargo_config_dir: |self: &Self| -> PathBuf { self.project.hot_dir.join(".cargo") },
+  cargo_config_dir: |self: &Self| -> PathBuf {
+    let mut path = self.project.hot_dir.clone();
+    if self.project.is_workspace {
+      path = path.parent().unwrap().to_path_buf();
+    }
+    path.join(".cargo")
+  },
   cargo_config_file: |self: &Self| -> PathBuf { self.cargo_config_dir().join("config.toml") },
 });
 
@@ -98,4 +105,18 @@ use_prefix!(HotTargetHotBin {
 use_prefix!(HotData {
   log_path: |self: &Self| -> PathBuf { self.files().data_dir().join("hotfnl.log") },
   project_data_path: |self: &Self| -> PathBuf { self.files().data_dir().join("project_data.toml") },
+});
+use_prefix!(HotWorkspace {
+  dir: |self: &Self| -> PathBuf {
+    self
+      .project
+      .is_workspace
+      .then(|| self.project.hot_dir.parent().unwrap().to_path_buf())
+      .unwrap_or(self.project.hot_dir.clone())
+  },
+  cargo_toml: |self: &Self| -> PathBuf { self.dir().join("Cargo.toml") },
+  cargo_lock: |self: &Self| -> PathBuf { self.dir().join("Cargo.lock") },
+  cargo_config_dir: |self: &Self| -> PathBuf { self.dir().join(".cargo") },
+  cargo_config_file: |self: &Self| -> PathBuf { self.cargo_config_dir().join("config.toml") },
+  main_rs: |self: &Self| -> PathBuf { self.dir().join("src").join("main.rs") },
 });
