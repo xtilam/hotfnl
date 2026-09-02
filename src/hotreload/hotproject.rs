@@ -1,3 +1,6 @@
+//! Hot-project scaffolding: generates the Cargo project, builds it, and holds path and
+//! rebuild logic for the hot-reload machinery.
+
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -8,23 +11,31 @@ use std::{env::args, path::PathBuf};
 
 use crate::hotreload::fs_utils::clean_path;
 use crate::{
+  HotLib,
   hotreload::{
     fs_utils::{bin_name, link_file, write_file},
     hotproject_files::HotProjectFiles,
   },
-  HotLib,
 };
 
+/// Metadata describing the generated hot project and how it maps to the user's project.
 #[derive(Default, Serialize, Deserialize, Debug, Clone)]
 pub struct HotProject {
+  /// Root directory of the user's crate.
   pub root_dir: PathBuf,
+  /// Directory where the generated hot project lives.
   pub hot_dir: PathBuf,
+  /// Absolute path to the user's main source file.
   pub src_path: PathBuf,
+  /// The workspace root directory.
   pub workspace_dir: PathBuf,
+  /// Path to the user's application binary.
   pub bin_path: PathBuf,
+  /// Whether the user's crate is part of a Cargo workspace.
   pub is_workspace: bool,
 }
 
+/// Persisted state of the hot project, written to disk between runs.
 #[derive(Default, Serialize, Deserialize, Debug, Clone)]
 pub struct HotProjectStore {
   pub project: HotProject,
@@ -32,6 +43,7 @@ pub struct HotProjectStore {
 }
 
 impl HotProject {
+  /// Computes the project layout from the crate root and source path.
   pub fn config(&mut self, root_dir: String, src_path: String) {
     let root_dir = PathBuf::from(root_dir);
     let mut bin_path = std::env::current_exe().expect("No current exe path");
@@ -52,8 +64,10 @@ impl HotProject {
     self.bin_path = bin_path;
     self.is_workspace = self.root_dir != self.workspace_dir;
   }
+  /// Rewrites the workspace `Cargo.toml` used by the hot project, renaming the package
+  /// and rewriting path dependencies to be absolute.
   pub fn write_cargo_workspace(&self) -> Result<()> {
-    use toml::{from_str, Value};
+    use toml::{Value, from_str};
     let mut cargo: Value = {
       let content = std::fs::read_to_string(self.workspace_dir.join("Cargo.toml"))?;
       from_str(&content).unwrap()
@@ -129,8 +143,11 @@ impl HotProject {
     )?;
     Ok(())
   }
+  /// Rewrites the user's `Cargo.toml` for the hot project: it configures the crate to
+  /// build both the hot binary and the dynamic library, injects the wrapper binary, and
+  /// rewrites path dependencies to be absolute.
   pub fn write_cargo_toml(&self) -> Result<()> {
-    use toml::{from_str, map::Map, Value};
+    use toml::{Value, from_str, map::Map};
     let mut cargo: Value = {
       let content = std::fs::read_to_string(self.root_dir.join("Cargo.toml"))?;
       from_str(&content).unwrap()
@@ -221,6 +238,8 @@ impl HotProject {
 
     Ok(())
   }
+  /// Scaffolds the entire hot project on disk: creates directories, the rewrite
+  /// `Cargo.toml`, the wrapper source, build script, and persisted project data.
   pub fn init_hot_project(&self) -> Result<()> {
     std::fs::create_dir_all(&self.files().lib().lib_clone_dir())?;
     std::fs::create_dir_all(&self.files().workspace().cargo_config_dir())?;
@@ -244,7 +263,7 @@ impl HotProject {
     write_file(
       &self.hot_dir.join("build.rs"),
       &format!(
-        r#" fn main() {{ println!("cargo:rustc-env=HOT_PROJECT_DIR={}"); }}"#,
+        r#"fn main() {{ println!("cargo:rustc-env=HOT_PROJECT_DIR={}"); }}"#,
         self.root_dir.to_string_lossy()
       ),
     )?;
@@ -295,6 +314,8 @@ impl HotProject {
     Ok(())
   }
 
+  /// Builds a `Command` that runs the wrapper binary via `cargo run --bin
+  /// <wrapper> -- <args>`.
   pub fn wrapper_command(&self, command_args: Option<Vec<String>>) -> Command {
     let mut command = Command::new("cargo");
     let arg = command_args.unwrap_or_else(|| args().skip(1).collect());
@@ -304,62 +325,45 @@ impl HotProject {
       .current_dir(&self.hot_dir);
     command
   }
-  pub fn log_command(&self) -> Command {
-    let mut command = Command::new("tail");
-    command
-      .args(&["-f", self.files().data().log_path().to_str().unwrap()])
-      .current_dir(&self.hot_dir);
-    command
-  }
-  pub fn bin_command(&self) -> Command {
-    let mut command = Command::new("cargo");
-    command
-      .args(&["run", "--bin", self.files().hotbin().name().as_str(), "--"])
-      .args(args().skip(1))
-      .current_dir(&self.hot_dir);
-    command
-  }
+
+  /// Builds a `Command` that runs the hot application binary directly.
   pub fn bin_target_command(&self) -> Command {
     let mut command = Command::new(self.files().hotbin().out_path());
     command.current_dir(&self.files().target_dir());
     command
   }
+
+  /// Builds a `Command` that compiles the hot project with `cargo build`.
   pub fn rebuild_command(&self) -> Command {
     let mut command = Command::new("cargo");
     command.args(&["build"]).current_dir(&self.hot_dir);
     command
   }
-  pub fn rebuild_lib(&self) -> Result<()> {
-    let mut child = Command::new("cargo")
-      .args(&["build", "--lib"])
-      .current_dir(&self.hot_dir)
-      .spawn()?;
-    let code = child.wait()?;
-    code.success().then_some(0).context("rebuild lib failed")?;
-    Ok(())
-  }
 
+  /// Runs `cargo build` in the hot project and waits for completion.
   pub fn rebuild(&self) -> Result<()> {
     let mut child = self.rebuild_command().spawn()?;
     let code = child.wait()?;
     code.success().then_some(0).context("rebuild failed")?;
     Ok(())
   }
+
+  /// Returns the computed hot-project file layout.
   pub fn files(&self) -> HotProjectFiles<'_> {
     HotProjectFiles::new(self)
   }
+
+  /// Reads the current library version number (defaults to `0` if unreadable).
   pub fn read_version(&self) -> u128 {
     std::fs::read_to_string(self.files().lib().lib_version_txt_path())
       .ok()
       .and_then(|s| s.trim().parse::<u128>().ok())
       .unwrap_or(0)
   }
-  pub fn write_version(&self, version: u128) -> Result<()> {
-    write_file(
-      &self.files().lib().lib_version_txt_path(),
-      &version.to_string(),
-    )
-  }
+
+  /// Snapshots the built library into a versioned clone and updates the version file.
+  ///
+  /// Silently ignores I/O failures; used after a successful rebuild in the watch loop.
   pub fn clone_lib(&self) {
     let build_version = SystemTime::now()
       .duration_since(UNIX_EPOCH)
@@ -382,6 +386,10 @@ impl HotProject {
   }
 }
 
+/// Configuration for additional source paths to watch for changes.
+///
+/// Obtained via the `watch!` macro. Paths added here are watched by the rebuild loop so
+/// that edits trigger a reload.
 pub struct HotProjectWatcherConfig {}
 impl HotProjectWatcherConfig {
   fn add_watch(&self, path: &str, recursive: bool) -> &Self {
@@ -393,13 +401,14 @@ impl HotProjectWatcherConfig {
     HotLib::get_instance_mut().watch_src.insert(path, recursive);
     self
   }
+
+  /// Watches `path` (non-recursively) for changes.
   pub fn watch(&self, path: &str) -> &Self {
     self.add_watch(path, false)
   }
+
+  /// Watches `path` recursively for changes.
   pub fn recursive(&self, path: &str) -> &Self {
     self.add_watch(path, true)
-  }
-  pub fn use_self_rebuild(&self) -> &Self {
-    self
   }
 }

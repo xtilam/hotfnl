@@ -1,3 +1,8 @@
+//! The wrapper binary's orchestration logic.
+//!
+//! The generated wrapper binary drives the hot-reload loop: it runs the app, watches
+//! source files, triggers rebuilds, and snapshots updated libraries.
+
 use std::{
   env::args,
   path::PathBuf,
@@ -6,9 +11,13 @@ use std::{
 };
 
 use crate::hotreload::{
-  file_watcher::FileWatcher, hotproject::HotProjectStore, macro_utils::macro_utils::bselect,
+  file_watcher::FileWatcher, hotproject::HotProjectStore, macro_utils::bselect,
 };
 
+/// Entry point for the generated wrapper binary.
+///
+/// Reads persisted hot-project data from `data_path` and dispatches to either watch mode
+/// (`--watch`/`-w`) or run mode.
 pub fn app(data_path: &str) {
   let action_run = args().nth(1).unwrap_or("".to_string());
   let data = {
@@ -110,6 +119,7 @@ fn run_watch(data: HotProjectStore) {
   }
 }
 
+/// Prints a titled section banner to stdout to delimit build/run phases.
 pub fn print_section(title: &str) {
   static LINE: &str = "==============================";
   print!("{}\r\n{}\r\n{}\r\n", LINE, title, LINE);

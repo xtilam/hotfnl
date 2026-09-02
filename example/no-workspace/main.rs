@@ -12,5 +12,5 @@ fn main() {
 
 #[hot_fn]
 fn hello() {
-  println!("Hello, world! 123");
+  println!("Hello, world! 1234");
 }

@@ -20,4 +20,3 @@ syn = { version = "2", features = ["full", "fold"] }
 [features]
 default = []
 prod = []
-lib = []

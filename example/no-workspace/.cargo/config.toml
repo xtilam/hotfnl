@@ -1,0 +1,3 @@
+[alias]
+dev = "build"
+rel = "build --release --features prod"

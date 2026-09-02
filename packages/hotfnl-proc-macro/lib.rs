@@ -1,3 +1,9 @@
+//! Procedural macros for [`hotfnl`](https://docs.rs/hotfnl).
+//!
+//! Provides `#[hot_main]`, `#[hot_fn]`, `#[hot_impl]`, and `#[hot_method]`. When the
+//! `prod` feature is enabled, all macros become pass-through no-ops that emit the
+//! original item unchanged.
+
 use proc_macro::TokenStream;
 
 #[cfg(not(feature = "prod"))]
@@ -21,7 +27,10 @@ macro_rules! token_unwrap {
   }};
 }
 
-
+/// Wraps `main` to bootstrap the hot-reload system.
+///
+/// Collects all `#[hot_fn]`-annotated functions, boots the engine, and runs the original
+/// body. A no-op under the `prod` feature.
 #[proc_macro_attribute]
 pub fn hot_main(_attr: TokenStream, item: TokenStream) -> TokenStream {
   #[cfg(feature = "prod")]
@@ -62,6 +71,10 @@ pub fn hot_main(_attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
   }
 }
+/// Wraps a free function so it becomes hot-patchable.
+///
+/// Generates a wrapper that dispatches the call through the hot function-pointer table,
+/// letting its implementation be swapped at runtime. A no-op under the `prod` feature.
 #[proc_macro_attribute]
 pub fn hot_fn(attr: TokenStream, item: TokenStream) -> TokenStream {
   #[cfg(feature = "prod")]
@@ -144,6 +157,8 @@ pub fn hot_fn(attr: TokenStream, item: TokenStream) -> TokenStream {
           let callback_list = hotfnl::get_fn_list::<fn(#(#arg_types),*) -> #ret>();
           hotfnl::inventory::submit! {
             hot::HotFn {
+              // SAFETY: `cb` is a valid function pointer of exactly this signature; the
+              // generic `fn()` erasure is cast back to the concrete type when dispatched.
               func: unsafe { std::mem::transmute(cb as *const()) },
               fn_name: FN_NAME,
               file_name: FILE_NAME,
@@ -158,7 +173,10 @@ pub fn hot_fn(attr: TokenStream, item: TokenStream) -> TokenStream {
   }
 }
 
-
+/// Marks an `impl` block as containing hot-patchable methods.
+///
+/// Used together with `#[hot_method]`; rewrites hot methods so they dispatch through the
+/// hot function table. A no-op under the `prod` feature.
 #[proc_macro_attribute]
 pub fn hot_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
   #[cfg(feature = "prod")]
@@ -187,7 +205,6 @@ pub fn hot_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
       syn::parse_str::<ItemImpl>(&impl_clone).unwrap()
     };
 
-    // Đây chính là App
     let self_name = token_unwrap!(
       input.self_ty.clone(),
       |input| input
@@ -354,6 +371,8 @@ pub fn hot_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         let callback_list = hotfnl::get_fn_list::<fn(#(#args_types),*) -> #ret>();
         hotfnl::inventory::submit! {
           hot::HotFn {
+            // SAFETY: the generated method function pointer is valid and has this exact
+            // signature; it is cast back to the concrete type when dispatched.
             func: unsafe { std::mem::transmute(#mm_static as *const()) },
             fn_name: FN_NAME,
             file_name: FILE_NAME,
@@ -376,6 +395,9 @@ pub fn hot_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
   }
 }
 
+/// Marks an individual method within a `#[hot_impl]` block as hot-patchable.
+///
+/// A no-op under the `prod` feature.
 #[proc_macro_attribute]
 pub fn hot_method(_attr: TokenStream, item: TokenStream) -> TokenStream {
   item
