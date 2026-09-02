@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+case $1 in
+"dev")
+  cargo run
+  ;;
+"watch")
+  cargo run -- -w
+  ;;
+"build")
+  cargo build --release -F prod
+  ;;
+"*")
+  echo "Usage: $0 {dev|watch|build}"
+  exit 1
+  ;;
+esac

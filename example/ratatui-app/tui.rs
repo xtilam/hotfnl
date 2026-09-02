@@ -1,8 +1,8 @@
-use crossterm::event::KeyEvent;
 use anyhow::Result;
+use crossterm::event::KeyEvent;
 use ratatui::{Frame, Terminal, backend::CrosstermBackend};
 
-use crate::macro_utils::macro_utils::bselect;
+use crate::macro_utils::bselect;
 
 pub enum TuiAppAction {
   ReRender,
