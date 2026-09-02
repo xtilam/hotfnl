@@ -60,7 +60,7 @@ impl RComponent for App {
     let size = frame.area();
     let block = Block::default()
       .title(
-        Span::from(format!("Counter: {}", 123))
+        Span::from(format!("Counter{}", 123))
           .bold()
           .underlined()
           .fg(Color::Yellow),
