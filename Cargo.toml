@@ -35,7 +35,7 @@ libloading = { workspace = true, optional = true }
 notify = { workspace = true, optional = true }
 toml = { workspace = true, optional = true }
 serde = { workspace = true, optional = true, features = ["derive"] }
-hotfnl-proc-macro = { path = "packages/hotfnl-proc-macro", optional = true }
+hotfnl-proc-macro = { version = "0.1.2", path = "packages/hotfnl-proc-macro", optional = true }
 paste = { workspace = true, optional = true }
 crossbeam-channel = { workspace = true, optional = true }
 anyhow = { workspace = true }
