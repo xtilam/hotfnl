@@ -8,7 +8,7 @@ authors.workspace = true
 edition.workspace = true
 
 [workspace.package]
-version = "0.1.1"
+version = "0.1.2"
 repository = "https://github.com/xtilam/hotfnl"
 license = "MIT"
 authors = ["ztilam60@gmail.com"]
@@ -26,7 +26,7 @@ anyhow = { version = "1.0.104" }
 serde = { version = "1.0.229", features = ["derive"] }
 paste = { version = "1.0.15" }
 crossbeam-channel = { version = "0.5.16" }
-hotfnl = { version = "0.1.0", path = "." }
+hotfnl = { path = "." }
 inventory = "0.3.24"
 
 

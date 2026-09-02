@@ -10,5 +10,5 @@ name = "nw"
 path = "main.rs"
 
 [dependencies]
-hotfnl = { version = "0.1.0", path = "../.." }
+hotfnl = { path = "../.." }
 inventory = "0.3.24"

@@ -7,7 +7,7 @@ edition = "2024"
 anyhow.workspace = true
 crossbeam-channel.workspace = true
 crossterm.workspace = true
-hotfnl = { version = "0.1.0", path = "../../" }
+hotfnl.workspace = true
 ratatui = "0.30.2"
 
 [features]
