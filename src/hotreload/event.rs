@@ -3,7 +3,7 @@
 //! Provides typed callback lists (`on_pre_patch`, `on_patch_success`, `on_patch_error`,
 //! `on_clean_up`) and scoped callback listeners that unregister on drop.
 
-use crate::{HotLib, PatchErr, hotreload::macro_utils::make_fn};
+use crate::{hotreload::macro_utils::make_fn, HotLib, PatchErr};
 use std::{
   collections::BTreeSet,
   sync::{Arc, RwLock},
@@ -48,6 +48,7 @@ macro_rules! make_hot_lib {
     }
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     /// Identifies the kind of a lifecycle callback for bookkeeping.
+    #[allow(clippy::enum_variant_names)]
     pub enum CallbackType {
       $($type,)*
     }
@@ -78,15 +79,24 @@ macro_rules! make_hot_lib {
   };
 }
 
+make_fn!(FnOnSourceChanged: Fn());
+make_fn!(FnOnPreRebuild: Fn());
+make_fn!(FnOnRebuildSuccess: Fn());
+make_fn!(FnOnRebuildError: Fn());
 make_fn!(FnOnPrePatch: Fn());
 make_fn!(FnOnCleanUp: Fn());
 make_fn!(FnOnPatchSuccess: Fn());
 make_fn!(FnOnPatchError: Fn(PatchErr));
+
 make_hot_lib!(HotLibEvent {
+  on_source_changed: FnOnSourceChanged,
   on_pre_patch: FnOnPrePatch,
   on_patch_success: FnOnPatchSuccess,
   on_patch_error: FnOnPatchError,
   on_clean_up: FnOnCleanUp,
+  on_pre_rebuild: FnOnPreRebuild,
+  on_rebuild_success: FnOnRebuildSuccess,
+  on_rebuild_error: FnOnRebuildError,
 });
 
 impl HotLibEvent {

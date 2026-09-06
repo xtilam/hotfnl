@@ -57,14 +57,16 @@ a source file triggers a rebuild and a live function-pointer swap — the app ke
 
 ## API overview
 
-| Item                                    | Purpose                                                         |
-|-----------------------------------------|-----------------------------------------------------------------|
-| `#[hot_main]`                           | Wrap `main` to bootstrap the hot-reload system.                 |
-| `#[hot_fn]`                             | Make a free function hot-patchable.                             |
-| `#[hot_impl]` + `#[hot_method]`         | Make an associated method hot-patchable.                        |
-| `hotfnl::run!()`                        | Start the hot-reload runtime.                                   |
-| `hotfnl::watch!(watch("./src"))`        | Watch extra paths (use `recursive(...)` for recursive watch).   |
-| `hotfnl::use_event!()` / `use_local_event!()` | Register lifecycle callbacks (`on_pre_patch`, `on_patch_success`, `on_patch_error`, `on_clean_up`). |
+| Item                                          | Purpose                                                         |
+|-----------------------------------------------|-----------------------------------------------------------------|
+| `#[hot_main]`                                 | Wrap `main` to bootstrap the hot-reload system.                 |
+| `#[hot_fn]`                                   | Make a free function hot-patchable.                             |
+| `#[hot_impl]` + `#[hot_method]`               | Make an associated method hot-patchable.                        |
+| `#[hot_check]`                                | Rewrite `#[dev]`/`#[prod]` attributes to proper `cfg` gates.   |
+| `hotfnl::run!()`                              | Start the hot-reload runtime.                                   |
+| `hotfnl::watch!(watch("./src"))`              | Watch extra paths (use `recursive(...)` for recursive watch).   |
+| `hotfnl::use_event!()` / `use_local_event!()` | Register lifecycle callbacks (`on_pre_patch`, `on_patch_success`, `on_patch_error`, `on_clean_up`, `on_source_changed`). |
+| `hotfnl::if_hot!()` / `if_prod!()`            | Conditional compilation: emit code only in hot or prod builds.  |
 
 ## Examples
 

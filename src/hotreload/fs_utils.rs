@@ -22,7 +22,7 @@ pub fn clean_path(path: &Path) -> PathBuf {
 }
 
 /// Returns the file stem of a binary path as a [`String`].
-pub fn bin_name(bin_path: &PathBuf) -> String {
+pub fn bin_name(bin_path: &Path) -> String {
   bin_path.file_stem().unwrap().to_str().unwrap().to_string()
 }
 

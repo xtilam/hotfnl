@@ -1,7 +1,3 @@
-//! Definition of a hot-swappable function handle.
-
-use std::sync::{Arc, RwLock};
-
 /// Describes a single hot-swappable function.
 ///
 /// Instances are produced by the `#[hot_fn]` / `#[hot_method]` proc macros and collected
@@ -14,6 +10,4 @@ pub struct HotFn {
   pub fn_name: &'static str,
   /// The raw function pointer, cast to the generic `fn()` type.
   pub func: fn(),
-  /// Optional live pointer used when the function is swapped.
-  pub ptr: Option<Arc<RwLock<fn()>>>,
 }

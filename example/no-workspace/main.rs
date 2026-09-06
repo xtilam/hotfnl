@@ -2,7 +2,7 @@ use hotfnl::{hot_fn, hot_main};
 
 #[hot_main]
 fn main() {
-  hotfnl::watch!(watch("./"));
+  hotfnl::watch!(watch("./main.rs"));
   hotfnl::run!();
   loop {
     std::thread::sleep(std::time::Duration::from_secs(1));

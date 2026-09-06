@@ -35,10 +35,8 @@ impl Tui {
       let tx = tx_term.clone();
       move || -> Result<()> {
         loop {
-          if let Ok(key) = crossterm::event::read() {
-            if let crossterm::event::Event::Key(key) = key {
-              tx.send(key)?;
-            }
+          if let Ok(crossterm::event::Event::Key(key)) = crossterm::event::read() {
+            tx.send(key)?;
           }
         }
       }

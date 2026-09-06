@@ -11,6 +11,7 @@ mod hotfn;
 mod hotlib;
 mod hotproject;
 mod hotproject_files;
+mod hotproject_server;
 mod macro_utils;
 mod wrapper;
 
@@ -29,6 +30,13 @@ pub fn reload_lib() {
   HotLib::get_instance()
     .trigger(hotlib::HotLibAction::ReloadLib)
     .ok();
+}
+
+/// Triggers a full application restart by exiting the current process. The hot-reload
+pub fn restart() {
+  if HotLib::get_instance().lib.read().unwrap().is_some() {
+    std::process::exit(0);
+  }
 }
 
 /// Boots the hot-reload system with the set of hot-swappable functions gathered from
@@ -57,12 +65,12 @@ pub fn run() -> Result<()> {
 }
 
 fn hot_run() -> Result<()> {
-  print_section("Building hot project...");
   HotLib::get_instance()
     .project
     .rebuild_command()
     .spawn()?
     .wait()?;
+
   let _ = Command::new(
     HotLib::get_instance_mut()
       .project

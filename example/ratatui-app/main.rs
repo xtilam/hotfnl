@@ -11,7 +11,7 @@ mod tui;
 
 #[hot_main]
 fn main() -> Result<()> {
-  hotfnl::watch!(watch("./").recursive("../../src"));
+  hotfnl::watch!(recursive("./").recursive("../../src/"));
   hotfnl::run!();
   enable_raw_mode()?;
   execute!(std::io::stdout(), crossterm::terminal::EnterAlternateScreen)?;
@@ -60,14 +60,14 @@ impl RComponent for App {
     let size = frame.area();
     let block = Block::default()
       .title(
-        Span::from(format!("Counter{}", 123))
+        Span::from(format!("Counter {}", 123))
           .bold()
           .underlined()
           .fg(Color::Yellow),
       )
       .borders(ratatui::widgets::Borders::ALL);
     frame.render_widget(
-      Paragraph::new(format!("Counter: hello! {}", self.counter))
+      Paragraph::new(format!("Counter: {}", self.counter))
         .block(block)
         .alignment(Alignment::Center),
       size,

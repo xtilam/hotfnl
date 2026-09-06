@@ -4,8 +4,8 @@
 //! blanket trait implementations for callback types.
 
 macro_rules! bselect {
-  ($([$action:tt($tx:expr), $(|$name: tt|)? {$($value:tt)*}]$(,)?)*) => {
-    crossbeam_channel::select! { $( $action($tx) $(->$name)? => {$($value)*},)* }
+  ($([$action:tt($($tx:tt)*), $(|$name: tt|)? {$($value:tt)*}]$(,)?)*) => {
+    crossbeam_channel::select! { $( $action($($tx)*) $(->$name)? => {$($value)*},)* }
   };
 }
 

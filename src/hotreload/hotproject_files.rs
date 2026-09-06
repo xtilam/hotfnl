@@ -22,6 +22,8 @@ macro_rules! use_prefix {
           HotProjectFiles { project: self.project }
         }
       }
+
+      #[allow(clippy::needless_arbitrary_self_type)]
       impl<'a> $name<'a> {
         $(
           pub fn $methodw(&self) -> $typew<'a> {
@@ -29,6 +31,8 @@ macro_rules! use_prefix {
           }
         )*
       }
+
+      #[allow(clippy::needless_arbitrary_self_type)]
       impl<'a> $name<'a> {
         $(
           pub fn $mname($($arg_name: $arg_type,)*)
@@ -82,7 +86,7 @@ use_prefix!(HotSrc {
 
 use_prefix!(HotWrapperBin {
   name: |self: &Self| -> String { format!("hotfnlw_{}", self.files().bin_name()) },
-  src_name: |self: &Self| -> String { format!("wrapper.rs") },
+  src_name: |self: &Self| -> String { "wrapper.rs".to_string() },
   src_path: |self: &Self| -> PathBuf { self.project.hot_dir.join(self.src_name()) },
   bin_path: |self: &Self| -> PathBuf { self.files().target_dir().join(self.name()) },
 });
@@ -93,9 +97,6 @@ use_prefix!(HotTargetLib {
   lib_clone_dir: |self: &Self| -> PathBuf { self.files().data_dir().join("lib") },
   lib_version_path: |self: &Self, build_time: u128| -> PathBuf {
     self.lib_clone_dir().join(format!("lib_{}.so", build_time))
-  },
-  lib_version_txt_path: |self: &Self| -> PathBuf {
-    self.files().data_dir().join("lib_version.txt")
   },
 });
 
@@ -108,14 +109,20 @@ use_prefix!(HotTargetHotBin {
 use_prefix!(HotData {
   log_path: |self: &Self| -> PathBuf { self.files().data_dir().join("hotfnl.log") },
   project_data_path: |self: &Self| -> PathBuf { self.files().data_dir().join("project_data.toml") },
+  project_state_path: |self: &Self| -> PathBuf {
+    self.files().data_dir().join("project_state.toml")
+  },
+  sock_dir: |self: &Self| -> PathBuf { self.files().data_dir().join("sock") },
+  project_sock_path: |self: &Self| -> PathBuf { self.files().data_dir().join("project.sock") },
 });
+
 use_prefix!(HotWorkspace {
   dir: |self: &Self| -> PathBuf {
-    self
-      .project
-      .is_workspace
-      .then(|| self.project.hot_dir.parent().unwrap().to_path_buf())
-      .unwrap_or(self.project.hot_dir.clone())
+    if self.project.is_workspace {
+      self.project.hot_dir.parent().unwrap().to_path_buf()
+    } else {
+      self.project.hot_dir.clone()
+    }
   },
   cargo_toml: |self: &Self| -> PathBuf { self.dir().join("Cargo.toml") },
   cargo_lock: |self: &Self| -> PathBuf { self.dir().join("Cargo.lock") },

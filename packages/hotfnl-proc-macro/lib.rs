@@ -1,8 +1,9 @@
 //! Procedural macros for [`hotfnl`](https://docs.rs/hotfnl).
 //!
-//! Provides `#[hot_main]`, `#[hot_fn]`, `#[hot_impl]`, and `#[hot_method]`. When the
-//! `prod` feature is enabled, all macros become pass-through no-ops that emit the
-//! original item unchanged.
+//! Provides `#[hot_main]`, `#[hot_fn]`, `#[hot_impl]`, `#[hot_method]`, and
+//! `#[hot_check]`. When the `prod` feature is enabled, all hot-reload macros become
+//! pass-through no-ops that emit the original item unchanged. `#[hot_check]` always
+//! rewrites regardless of the feature flag.
 
 use proc_macro::TokenStream;
 
@@ -47,9 +48,32 @@ pub fn hot_main(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let vis = &input.vis;
     let sig = &input.sig;
     let body = &input.block;
+    let attrs = &input.attrs;
     let expanded = {
       quote! {
-        hotfnl::use_hot!();
+        pub mod hot {
+          #[derive(Debug)]
+          pub struct HotFn {
+            pub func: fn(),
+            pub fn_name: &'static str,
+            pub file_name: &'static str,
+          }
+        }
+        hotfnl::inventory::collect!(crate::hot::HotFn);
+        #[unsafe(no_mangle)]
+        pub extern "C" fn hrl_get_functions(lib: std::sync::Arc<std::sync::RwLock<hotfnl::HotLib>>) -> Vec<hotfnl::HotFn> {
+          let mut list_fn: Vec<hotfnl::HotFn> = vec![];
+          hotfnl::inventory::iter::<hot::HotFn>().for_each(|f| {
+            list_fn.push(hotfnl::HotFn {
+              file_name: f.file_name,
+              fn_name: f.fn_name,
+              func: f.func,
+            });
+          });
+          hotfnl::HotLib::rewrite_instance(lib);
+          list_fn
+        }
+        #(#attrs)*
         #[allow(dead_code)]
         #vis #sig {
           {
@@ -59,7 +83,6 @@ pub fn hot_main(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 file_name: f.file_name,
                 fn_name: f.fn_name,
                 func: f.func,
-                ptr: None,
               })
               .collect();
             hotfnl::boot(#is_hot_project, list_fn, file!(), #env);
@@ -92,7 +115,7 @@ pub fn hot_fn(attr: TokenStream, item: TokenStream) -> TokenStream {
     let vis = &input.vis;
     let sig = &input.sig;
     let body = &input.block;
-    let expanded: _ = {
+    let expanded = {
       let mut arg_names = Vec::new();
       let mut arg_types = Vec::new();
 
@@ -136,14 +159,14 @@ pub fn hot_fn(attr: TokenStream, item: TokenStream) -> TokenStream {
 
       let fn_name = format!(
         "{}::{}::({})->{}",
-        attr.to_string(),
-        &sig.ident.to_string(),
+        attr,
+        sig.ident,
         arg_types
           .iter()
           .map(|ty| (quote! { #ty }).to_string())
           .collect::<Vec<_>>()
           .join(", "),
-        ret.to_string()
+        ret
       );
 
       quote! {
@@ -156,7 +179,7 @@ pub fn hot_fn(attr: TokenStream, item: TokenStream) -> TokenStream {
           static IDX: LazyLock<u16> = LazyLock::new(|| hotfnl::get_fn_idx(FN_NAME, FILE_NAME));
           let callback_list = hotfnl::get_fn_list::<fn(#(#arg_types),*) -> #ret>();
           hotfnl::inventory::submit! {
-            hot::HotFn {
+            crate::hot::HotFn {
               // SAFETY: `cb` is a valid function pointer of exactly this signature; the
               // generic `fn()` erasure is cast back to the concrete type when dispatched.
               func: unsafe { std::mem::transmute(cb as *const()) },
@@ -222,76 +245,59 @@ pub fn hot_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let (_prefix, self_static) = {
       use proc_macro::TokenTree::*;
       use proc_macro::token_stream::IntoIter;
-
       struct Data {
         iter: IntoIter,
         prefix: String,
         generic: String,
       }
-
-      fn prefix_cb(d: &mut Data) -> Option<()> {
-        if let Punct(p) = d.iter.next()? {
-          if p.as_char() != '=' {
-            return next(d);
-          }
-        };
-        if let Literal(l) = d.iter.next()? {
-          d.prefix = l.to_string();
-        };
-        return next(d);
-      }
-      fn generic_cb(d: &mut Data) -> Option<()> {
-        let mut list = Vec::new();
-        let mut open = 0;
-        if let Punct(p) = d.iter.next()? {
-          if p.as_char() != '=' {
-            return next(d);
-          }
-        };
-        loop {
-          let token = d.iter.next()?;
-          let str = token.to_string();
-          match token {
-            Punct(p) => {
-              match p.as_char() {
-                '<' => open += 1,
-                '>' => open -= 1,
-                _ => {}
-              };
-            }
-            _ => {}
-          };
-          list.push(str);
-          if open == 0 {
-            break;
-          }
-        }
-        let generic_str = list.join(" ");
-        if !generic_str.is_empty() {
-          d.generic = generic_str;
-        }
-        return next(d);
-      }
-
-      fn next(d: &mut Data) -> Option<()> {
-        match d.iter.next()? {
-          Ident(i) => match i.to_string().as_str() {
-            "prefix" => return prefix_cb(d),
-            "generic" => return generic_cb(d),
-            _ => {}
-          },
-          _ => {}
-        };
-
-        next(d)
-      }
-
       let mut rs = Data {
         iter: attr.clone().into_iter(),
         prefix: String::new(),
         generic: String::from("<>"),
       };
-      next(&mut rs);
+      impl Data {
+        fn generic_cb(&mut self) -> Option<()> {
+          if let Punct(p) = self.iter.next()?
+            && p.as_char() == '='
+            && let Punct(p) = self.iter.next()?
+            && p.as_char() == '<'
+          {
+            let mut list = vec!["<".to_string()];
+            let mut open = 1;
+            while open > 0 {
+              let token = self.iter.next()?;
+              list.push(token.to_string());
+              if let Punct(p) = token {
+                match p.as_char() {
+                  '<' => open += 1,
+                  '>' => open -= 1,
+                  _ => {}
+                };
+              };
+            }
+            self.generic = list.join(" ");
+          };
+          self.next()
+        }
+        fn prefix_cb(&mut self) -> Option<()> {
+          if let Punct(p) = self.iter.next()?
+            && p.as_char() == '='
+            && let Literal(l) = self.iter.next()?
+          {
+            self.prefix = l.to_string();
+          };
+          self.next()
+        }
+        fn next(&mut self) -> Option<()> {
+          let i = self.iter.next()?;
+          match i.to_string().as_str() {
+            "prefix" => self.prefix_cb(),
+            "generic" => self.generic_cb(),
+            _ => self.next(),
+          }
+        }
+      }
+      rs.next();
       (rs.prefix, format!("{}::{}", self_name, rs.generic))
     };
     for item in &mut input.items {
@@ -314,7 +320,7 @@ pub fn hot_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
       method_clone.vis = syn::Visibility::Inherited;
       method_clone.sig.ident = syn::Ident::new(
-        &format!("hot_method_{}", &method_name),
+        &format!("hot_method_{}", method_name),
         Span::call_site().into(),
       );
       let method_hot_name = &method_clone.sig.ident;
@@ -357,10 +363,10 @@ pub fn hot_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
           .map(|ty| (quote! { #ty }).to_string())
           .collect::<Vec<_>>()
           .join(", "),
-        ret.to_string()
+        ret
       );
 
-      let method_static = format!("{}::{}", self_static, method_hot_name.to_string());
+      let method_static = format!("{}::{}", self_static, method_hot_name);
       let mm_static: TokenStream2 = method_static.parse().unwrap();
 
       method.block = syn::parse_quote!({
@@ -370,9 +376,7 @@ pub fn hot_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         static IDX: LazyLock<u16> = LazyLock::new(|| hotfnl::get_fn_idx(FN_NAME, FILE_NAME));
         let callback_list = hotfnl::get_fn_list::<fn(#(#args_types),*) -> #ret>();
         hotfnl::inventory::submit! {
-          hot::HotFn {
-            // SAFETY: the generated method function pointer is valid and has this exact
-            // signature; it is cast back to the concrete type when dispatched.
+          crate::hot::HotFn {
             func: unsafe { std::mem::transmute(#mm_static as *const()) },
             fn_name: FN_NAME,
             file_name: FILE_NAME,
@@ -401,4 +405,67 @@ pub fn hot_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn hot_method(_attr: TokenStream, item: TokenStream) -> TokenStream {
   item
+}
+
+/// Transforms `#[dev]` and `#[prod]` attributes into proper `cfg` feature gates.
+///
+/// `#[dev]` is rewritten to `#[cfg(not(feature = "prod"))]` and `#[prod]` is rewritten
+/// to `#[cfg(feature = "prod")]`. Works on any item: functions, structs, enums,
+/// individual fields, variants, and `impl` blocks.
+///
+/// Unlike the other hot-reload macros, `#[hot_check]` always runs regardless of the
+/// `prod` feature flag, since its job is to produce correct conditional compilation
+/// attributes for both modes.
+///
+/// # Examples
+///
+/// ```ignore
+/// #[hot_check]
+/// #[dev]
+/// fn debug_only_function() {
+///   // This only exists in hot (non-prod) builds
+/// }
+///
+/// #[hot_check]
+/// struct Config {
+///   #[prod]
+///   production_setting: bool,
+///   #[dev]
+///   debug_flag: bool,
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn hot_check(_attr: TokenStream, item: TokenStream) -> TokenStream {
+  use quote::quote;
+  use syn::visit_mut::{self, VisitMut};
+  use syn::{Attribute, Item, parse_macro_input};
+
+  struct DevCleaner {
+    dev: Attribute,
+    prod: Attribute,
+  }
+  impl Default for DevCleaner {
+    fn default() -> Self {
+      DevCleaner {
+        dev: syn::parse_quote!(#[cfg(not(feature = "prod"))]),
+        prod: syn::parse_quote!(#[cfg(feature = "prod")]),
+      }
+    }
+  }
+  impl VisitMut for DevCleaner {
+    fn visit_attribute_mut(&mut self, i: &mut syn::Attribute) {
+      if i.path().is_ident("dev") {
+        *i = self.dev.clone();
+      } else if i.path().is_ident("prod") {
+        *i = self.prod.clone();
+      }
+
+      visit_mut::visit_attribute_mut(self, i);
+    }
+  }
+
+  let mut input = parse_macro_input!(item as Item);
+  let mut cleaner = DevCleaner::default();
+  cleaner.visit_item_mut(&mut input);
+  quote!(#input).into()
 }

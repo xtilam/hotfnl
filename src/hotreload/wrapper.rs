@@ -3,124 +3,151 @@
 //! The generated wrapper binary drives the hot-reload loop: it runs the app, watches
 //! source files, triggers rebuilds, and snapshots updated libraries.
 
+use crate::hotreload::{
+  file_watcher::FileWatcher,
+  hotproject::{HotProject, HotProjectState, HotProjectStoreData},
+  macro_utils::bselect,
+};
+
+use anyhow::Result;
+use postcard::to_allocvec;
 use std::{
-  env::args,
+  os::unix::net::UnixDatagram,
   path::PathBuf,
   process::{Child, Stdio},
   time::Duration,
 };
 
-use crate::hotreload::{
-  file_watcher::FileWatcher, hotproject::HotProjectStore, macro_utils::bselect,
-};
-
-/// Entry point for the generated wrapper binary.
-///
-/// Reads persisted hot-project data from `data_path` and dispatches to either watch mode
-/// (`--watch`/`-w`) or run mode.
 pub fn app(data_path: &str) {
-  let action_run = args().nth(1).unwrap_or("".to_string());
-  let data = {
-    let path = PathBuf::from(data_path);
-    toml::de::from_str::<HotProjectStore>(&std::fs::read_to_string(path).unwrap()).unwrap()
-  };
-
-  match action_run.as_str() {
-    "--watch" | "-w" => run_watch(data),
-    _ => run_app(data),
+  if let Err(e) = HotProjectServer::new(data_path).map(|s| s.run()) {
+    panic!("HotProjectServer failed: {:?}", e);
   };
 }
 
-fn run_app(data: HotProjectStore) {
-  let project = data.project;
-  let version_file = project.files().lib().lib_version_txt_path();
-  let mut app_version = project.read_version();
-  print_section(&format!(
-    "Run cargo run --bin {} -- [--watch/-w] to rebuild on change",
-    project.files().bin_name()
-  ));
-  loop {
-    project
-      .bin_target_command()
-      .stdin(Stdio::inherit())
-      .stdout(Stdio::inherit())
-      .stderr(Stdio::inherit())
-      .spawn()
-      .ok()
-      .map(|mut child| {
-        child.wait().ok()?;
-        Some(())
-      });
+pub struct HotProjectServer {
+  watch_src: FileWatcher,
+  project: HotProject,
+  fd: UnixDatagram,
+  sock_path: String,
+}
 
-    print_section("Application exited, waiting for changes...");
+impl HotProjectServer {
+  pub fn new(data_path: &str) -> Result<Self> {
+    let store = {
+      let path = PathBuf::from(data_path);
+      toml::de::from_str::<HotProjectStoreData>(&std::fs::read_to_string(path)?)?
+    };
+    let mut watch_src = FileWatcher::new();
+    watch_src.files = store.watch_src;
+    let sock_path = store.project.files().data().project_sock_path();
 
-    let mut watcher = FileWatcher::new();
-    watcher.add(version_file.clone(), false);
-    let (_, version_rx) = watcher.new_channel();
-    watcher.run();
+    std::fs::remove_file(&sock_path).ok();
+    let fd = UnixDatagram::unbound()?;
+    Ok(HotProjectServer {
+      watch_src,
+      project: store.project,
+      fd,
+      sock_path: sock_path.to_string_lossy().to_string(),
+    })
+  }
+  fn send_state(&self, state: HotProjectState) -> Option<()> {
+    let data = to_allocvec(&state).ok()?;
+    self.fd.send_to(data.as_slice(), &self.sock_path).ok()?;
+    Some(())
+  }
+  fn run(mut self) -> Result<()> {
+    let (_, src_change_rx) = self.watch_src.new_channel();
+    self.watch_src.run();
+    println!(
+      "HotProjectServer is running... {}",
+      self
+        .watch_src
+        .files
+        .iter()
+        .map(|f| format!("\r\n => {} : {}", f.0.to_string_lossy(), f.1))
+        .collect::<Vec<_>>()
+        .join("")
+    );
+    let mut is_src_changed = false;
+    let mut need_restart = true;
+    let mut rebuild_task = None::<Child>;
+    let mut app_task = None::<Child>;
 
     loop {
-      let current_version = project.read_version();
-      if current_version != app_version {
-        app_version = current_version;
-        break;
-      }
-      version_rx.recv().ok();
-    }
-  }
-}
-
-fn run_watch(data: HotProjectStore) {
-  let project = data.project;
-  let mut watch_src = FileWatcher::new();
-  watch_src.files = data.watch_src;
-  let (_, src_change_rx) = watch_src.new_channel();
-  watch_src.run();
-  let mut is_src_changed = false;
-  let mut rebuild_task: Option<Child> = None;
-  project.clone_lib();
-
-  loop {
-    bselect!(
-      [recv(src_change_rx), |evt| {
-        evt
-          .map(|e| {
-            if e.kind.is_modify() && !is_src_changed {
-              is_src_changed = true;
-            }
-          })
-          .ok();
-      }],
-      [default(Duration::from_millis(100)), {
-        if is_src_changed {
-          if let Some(mut child) = rebuild_task.take() {
-            child.kill().ok();
-            child.wait().ok();
+      use HotProjectState::*;
+      bselect!(
+        [recv(src_change_rx), |evt| {
+          if !is_src_changed
+            && let Ok(evt) = evt
+            && evt.kind.is_modify()
+            && evt
+              .paths
+              .iter()
+              .find(|p| p.extension().is_some_and(|ext| ext == "rs"))
+              .is_some()
+          {
+            self.send_state(SourceChanged);
+            is_src_changed = true;
+          };
+        }],
+        [default(Duration::from_millis(100)), {
+          if is_src_changed {
+            if let Some(mut child) = rebuild_task.take() {
+              child.kill().ok();
+              child.wait().ok();
+              continue;
+            };
+            self.send_state(Rebuilding);
+            rebuild_task = self
+              .project
+              .rebuild_command()
+              .stdout(Stdio::null())
+              .stderr(Stdio::null())
+              .spawn()
+              .ok();
+            need_restart = false;
+            is_src_changed = false;
             continue;
           };
-          print_section("REBUILDING...");
-          rebuild_task = project
-            .rebuild_command()
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .ok();
-          is_src_changed = false;
-        };
 
-        if let Some(child) = rebuild_task.as_mut() {
-          if let Ok(Some(status)) = child.try_wait() {
-            status.success().then(|| project.clone_lib());
+          if let Some(child) = rebuild_task.as_mut()
+            && let Ok(Some(status)) = child.try_wait()
+          {
+            if status.success()
+              && let Some(version) = self.project.clone_lib()
+            {
+              need_restart = true;
+              self.send_state(BuildSuccess(version));
+            } else {
+              self.send_state(BuildFailed);
+            }
             rebuild_task.take();
-          }
-        }
-      }]
-    );
-  }
-}
+          };
 
-/// Prints a titled section banner to stdout to delimit build/run phases.
-pub fn print_section(title: &str) {
-  static LINE: &str = "==============================";
-  print!("{}\r\n{}\r\n{}\r\n", LINE, title, LINE);
+          match app_task.as_mut() {
+            Some(child) => {
+              if let Ok(Some(_)) = child.try_wait() {
+                app_task.take();
+                std::fs::remove_file(&self.sock_path).ok();
+              }
+            }
+            None => {
+              if need_restart {
+                std::fs::remove_file(&self.sock_path).ok();
+                need_restart = false;
+                app_task = self
+                  .project
+                  .bin_target_command()
+                  .stdin(Stdio::inherit())
+                  .stdout(Stdio::inherit())
+                  .stderr(Stdio::inherit())
+                  .spawn()
+                  .ok();
+              }
+            }
+          }
+        }]
+      );
+    }
+  }
 }

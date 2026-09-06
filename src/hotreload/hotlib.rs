@@ -2,8 +2,10 @@
 //! loop that drives reloads.
 
 use anyhow::Result;
+use postcard::from_bytes;
 use std::{
   collections::BTreeMap,
+  os::unix::net::UnixDatagram,
   panic,
   path::PathBuf,
   sync::{Arc, LazyLock, OnceLock, RwLock, RwLockReadGuard, RwLockWriteGuard},
@@ -12,7 +14,8 @@ use std::{
 use crate::{
   HotLibEvent,
   hotreload::{
-    file_watcher::FileWatcher, hotfn::HotFn, hotproject::HotProject, macro_utils::bselect,
+    hotfn::HotFn,
+    hotproject::{HotProject, HotProjectState},
   },
 };
 
@@ -48,6 +51,8 @@ pub struct HotLib {
 pub enum HotLibAction {
   /// Reload the dynamic library and patch function pointers.
   ReloadLib,
+  /// A watched source file was modified, triggering `on_source_changed` callbacks.
+  SourceChange,
 }
 
 /// Errors that can occur while loading and applying a patched library.
@@ -58,7 +63,7 @@ pub enum PatchErr {
   /// An existing library could not be closed/unloaded.
   FailedCleanLib(String),
   /// The library does not export the required `hrl_get_functions` symbol.
-  NoGetFunctionsFn,
+  NoFnGetFunctions,
   /// The new library changed the set of functions (added or removed entries).
   ToManyChange,
   /// An unspecified error occurred.
@@ -72,12 +77,11 @@ static INSTANCE: LazyLock<Arc<RwLock<HotLib>>> = LazyLock::new(|| {
     .as_ref()
     .as_ref()
     .cloned()
-    .unwrap_or_else(|| Arc::new(RwLock::new(HotLib::new())))
+    .unwrap_or_else(|| Arc::new(RwLock::new(HotLib::default())))
 });
 
-impl HotLib {
-  /// Creates a fresh, unconfigured hot-reload engine.
-  pub fn new() -> Self {
+impl Default for HotLib {
+  fn default() -> Self {
     Self {
       is_hot_project: false,
       project: HotProject::default(),
@@ -91,6 +95,9 @@ impl HotLib {
       watch_src: BTreeMap::new(),
     }
   }
+}
+impl HotLib {
+  /// Creates a fresh, unconfigured hot-reload engine.
   /// Replaces the singleton instance with a provided one.
   ///
   /// This is used by the `hrl_get_functions` export to hand the library's instance back
@@ -131,18 +138,15 @@ impl HotLib {
     self.is_configured = true;
 
     let mut dict = BTreeMap::new();
-    let mut functions = Vec::new();
-    let mut idx: u16 = 0;
-    for f in list_fn {
+    let mut functions = Vec::with_capacity(list_fn.len());
+    list_fn.iter().enumerate().for_each(|(i, f)| {
       let key = Self::to_key(f.fn_name, f.file_name);
       if dict.contains_key(&key) {
-        panic!("Duplicate function name: {}", &key);
+        panic!("Duplicate function name: {}", key);
       }
-      dict.insert(key, idx);
+      dict.insert(key, i as u16);
       functions.push(f.func);
-      idx += 1;
-    }
-
+    });
     self.functions_dict = dict;
     self.backup_functions = functions.clone();
     self.functions = Arc::new(RwLock::new(functions));
@@ -171,7 +175,7 @@ impl HotLib {
     let get_functions = unsafe {
       lib.get::<unsafe extern "C" fn(Arc<RwLock<Self>>) -> Vec<HotFn>>(b"hrl_get_functions")
     }
-    .map_err(|_| PatchErr::NoGetFunctionsFn)?;
+    .map_err(|_| PatchErr::NoFnGetFunctions)?;
 
     // SAFETY: Calls the FFI symbol resolved above. The function returns owned `HotFn`
     // values whose `func` fields are raw function pointers cast to `fn()`.
@@ -184,12 +188,12 @@ impl HotLib {
       if let Some(idx) = map_fn.get(&key) {
         vec_fn[*idx as usize] = f.func;
         map_fn.remove(&key);
-      } else {
-        lib
-          .close()
-          .map_err(|e| PatchErr::FailedCleanLib(e.to_string()))?;
-        return Err(PatchErr::ToManyChange);
+        continue;
       }
+      lib
+        .close()
+        .map_err(|e| PatchErr::FailedCleanLib(e.to_string()))?;
+      return Err(PatchErr::ToManyChange);
     }
 
     if !map_fn.is_empty() {
@@ -199,7 +203,7 @@ impl HotLib {
       return Err(PatchErr::ToManyChange);
     }
 
-    return Ok((lib, vec_fn));
+    Ok((lib, vec_fn))
   }
   /// Swaps in a newly loaded library and its function table.
   ///
@@ -223,81 +227,59 @@ impl HotLib {
     self.lib.write().unwrap().replace(lib);
     None
   }
+
   /// Spawns the background watch loop.
-  ///
-  /// The loop watches the `lib_version.txt` file and, on modification, reloads the
-  /// library and patches function pointers. It terminates the process if the patch
-  /// cannot be applied safely (a state it cannot recover from in place).
   pub fn run_watch_lib(&mut self) {
-    let (tx, hot_rx) = crossbeam_channel::unbounded();
-    let lib_version = self.project.files().lib().lib_version_txt_path();
+    let (tx, _) = crossbeam_channel::unbounded();
+    let fifo_path = self.project.files().data().project_sock_path();
     self.tx = tx.clone();
-    std::thread::spawn({
-      let tx = tx.clone();
-      move || {
-        let mut watch_lib = FileWatcher::new();
-        watch_lib.add(lib_version.clone(), false);
-        let (_, watch_build_rx) = watch_lib.new_channel();
-        watch_lib.run();
-        loop {
-          bselect!(
-            [recv(watch_build_rx), |evt| {
-              if let Ok(event) = evt {
-                if event.kind.is_modify() {
-                  tx.send(HotLibAction::ReloadLib).ok();
+    std::thread::spawn(move || {
+      let fd = UnixDatagram::bind(fifo_path).expect("Failed to bind to socket");
+      let evt = Self::get_instance().event.clone();
+      loop {
+        let mut buf = [0u8; size_of::<HotProjectState>()];
+        if let Ok(_) = fd.recv(&mut buf)
+          && let Ok(state) = from_bytes::<HotProjectState>(&buf)
+        {
+          match state {
+            HotProjectState::SourceChanged => {
+              let e = evt.read().unwrap();
+              e.on_source_changed.iter().for_each(|f| f());
+            }
+            HotProjectState::Rebuilding => {
+              let e = evt.read().unwrap();
+              e.on_pre_rebuild.iter().for_each(|f| f());
+            }
+            HotProjectState::BuildSuccess(version) => {
+              let lib_path = Self::get_instance()
+                .project
+                .files()
+                .lib()
+                .lib_version_path(version);
+              let e = evt.read().unwrap();
+              e.on_pre_patch.iter().for_each(|f| f());
+              match Self::get_instance().get_lib(lib_path) {
+                Ok((lib, list_fn)) => {
+                  if Self::get_instance().apply_lib(lib, list_fn).is_some() {
+                    std::process::exit(0);
+                  }
+                  e.on_patch_success.iter().for_each(|f| f());
                 }
-              }
-            }],
-            [recv(hot_rx), |action| {
-              action
-                .map(|action| {
-                  match action {
-                    HotLibAction::ReloadLib => {
-                      let version = std::fs::read_to_string(&lib_version)
-                        .ok()
-                        .and_then(|v| v.parse::<u128>().ok())?;
-                      let lib_path = Self::get_instance()
-                        .project
-                        .files()
-                        .lib()
-                        .lib_version_path(version);
-                      let evt = Self::get_instance().event.clone();
-                      evt.read().unwrap().on_pre_patch.iter().for_each(|f| f());
-                      match Self::get_instance().get_lib(lib_path) {
-                        Ok((lib, list_fn)) => {
-                          if let Some(_) = Self::get_instance().apply_lib(lib, list_fn) {
-                            std::process::exit(0);
-                          }
-                          evt
-                            .read()
-                            .unwrap()
-                            .on_patch_success
-                            .iter()
-                            .for_each(|f| f());
-                        }
-                        Err(err) => match err {
-                          PatchErr::FailedLoadLib
-                          | PatchErr::NoGetFunctionsFn
-                          | PatchErr::OtherError => {
-                            evt
-                              .read()
-                              .unwrap()
-                              .on_patch_error
-                              .iter()
-                              .for_each(|f| f(err.clone()));
-                          }
-                          PatchErr::ToManyChange | PatchErr::FailedCleanLib(_) => {
-                            std::process::exit(0);
-                          }
-                        },
-                      };
-                    }
-                  };
-                  Some(())
-                })
-                .ok();
-            }]
-          );
+                Err(err) => match err {
+                  PatchErr::FailedLoadLib | PatchErr::NoFnGetFunctions | PatchErr::OtherError => {
+                    e.on_patch_error.iter().for_each(|f| f(err.clone()));
+                  }
+                  PatchErr::ToManyChange | PatchErr::FailedCleanLib(_) => {
+                    std::process::exit(0);
+                  }
+                },
+              };
+            }
+            HotProjectState::BuildFailed => {
+              let e = evt.read().unwrap();
+              e.on_rebuild_error.iter().for_each(|f| f());
+            }
+          };
         }
       }
     });
@@ -311,8 +293,7 @@ impl HotLib {
 pub fn get_fn_idx(fn_name: &'static str, file_name: &'static str) -> u16 {
   let i = HotLib::get_instance();
   let key = HotLib::to_key(fn_name, file_name);
-  let idx = *i.functions_dict.get(&key).unwrap();
-  idx
+  *i.functions_dict.get(&key).unwrap()
 }
 
 /// Returns the active function-pointer table, typed as `Vec<T>`.

@@ -33,11 +33,14 @@ pub struct HotProject {
   pub bin_path: PathBuf,
   /// Whether the user's crate is part of a Cargo workspace.
   pub is_workspace: bool,
+
+  /// The profile used for building the hot project (e.g., "debug" or "release").
+  pub profile: String,
 }
 
 /// Persisted state of the hot project, written to disk between runs.
 #[derive(Default, Serialize, Deserialize, Debug, Clone)]
-pub struct HotProjectStore {
+pub struct HotProjectStoreData {
   pub project: HotProject,
   pub watch_src: BTreeMap<PathBuf, bool>,
 }
@@ -73,66 +76,62 @@ impl HotProject {
       from_str(&content).unwrap()
     };
 
-    cargo.as_table_mut().map(|t| {
+    if let Some(t) = cargo.as_table_mut() {
       t.remove("lib");
       t.remove("bin");
-      t.get_mut("package")
-        .and_then(|v| v.as_table_mut())
-        .map(|v| {
-          let name = v.get("name");
-          v.insert(
-            "name".into(),
-            format!("hotfnl_{}", name.unwrap().as_str().unwrap()).into(),
-          );
-        });
-    });
+      if let Some(v) = t.get_mut("package").and_then(|v| v.as_table_mut()) {
+        let name = v.get("name");
+        v.insert(
+          "name".into(),
+          format!("hotfnl_{}", name.unwrap().as_str().unwrap()).into(),
+        );
+      }
+    };
 
-    cargo
+    if let Some(v) = cargo
       .get_mut("workspace")
       .and_then(|v| v.get_mut("members"))
-      .and_then(|v| {
-        v.is_array()
-          .then(|| *v = toml::Value::Array(vec![format!("./{}", self.files().bin_name()).into()]))
-      });
+      && v.is_array()
+    {
+      *v = toml::Value::Array(vec![format!("./{}", self.files().bin_name()).into()]);
+    };
 
-    cargo
-      .get_mut("workspace")
-      .and_then(|v| v.get_mut("dependencies"))
-      .and_then(|v| v.as_table_mut())
-      .and_then(|v| {
-        Some(v.iter_mut().for_each(|item| {
-          item.1.get_mut("path").and_then(|v| {
-            v.is_str().then(|| {
-              *v = toml::Value::String(
-                self
-                  .workspace_dir
-                  .join(v.as_str().unwrap())
-                  .to_string_lossy()
-                  .to_string(),
-              )
-            })
-          });
-        }))
+    if let Some(v) = cargo.get_mut("workspace")
+      && let Some(v) = v.get_mut("dependencies")
+      && let Some(v) = v.as_table_mut()
+    {
+      v.iter_mut().for_each(|item| {
+        if let Some(v) = item.1.get_mut("path")
+          && v.is_str()
+        {
+          *v = toml::Value::String(
+            self
+              .workspace_dir
+              .join(v.as_str().unwrap())
+              .to_string_lossy()
+              .to_string(),
+          )
+        }
       });
+    };
 
-    cargo
-      .get_mut("dependencies")
-      .and_then(|v| v.is_table().then(|| v.as_table_mut().unwrap()))
-      .and_then(|v| {
-        Some(v.iter_mut().for_each(|item| {
-          item.1.get_mut("path").and_then(|v| {
-            v.is_str().then(|| {
-              *v = toml::Value::String(
-                self
-                  .workspace_dir
-                  .join(v.as_str().unwrap())
-                  .to_string_lossy()
-                  .to_string(),
-              )
-            })
-          });
-        }))
-      });
+    if let Some(v) = cargo.get_mut("dependencies")
+      && let Some(v) = v.as_table_mut()
+    {
+      v.iter_mut().for_each(|item| {
+        item.1.get_mut("path").and_then(|v| {
+          v.is_str().then(|| {
+            *v = toml::Value::String(
+              self
+                .workspace_dir
+                .join(v.as_str().unwrap())
+                .to_string_lossy()
+                .to_string(),
+            )
+          })
+        });
+      })
+    };
     write_file(
       &self.files().workspace().cargo_toml(),
       toml::to_string(&cargo)?.as_str(),
@@ -152,57 +151,56 @@ impl HotProject {
       let content = std::fs::read_to_string(self.root_dir.join("Cargo.toml"))?;
       from_str(&content).unwrap()
     };
-    cargo
-      .get_mut("dependencies")
-      .and_then(|v| v.is_table().then(|| v.as_table_mut().unwrap()))
-      .and_then(|v| {
-        Some(v.iter_mut().for_each(|item| {
-          item.1.get_mut("path").and_then(|v| {
-            v.is_str().then(|| {
-              *v = toml::Value::String(
-                self
-                  .root_dir
-                  .join(v.as_str().unwrap())
-                  .to_string_lossy()
-                  .to_string(),
-              )
-            })
-          });
-        }))
-      });
+    if let Some(v) = cargo.get_mut("dependencies")
+      && let Some(v) = v.as_table_mut()
+    {
+      v.iter_mut().for_each(|item| {
+        item.1.get_mut("path").and_then(|v| {
+          v.is_str().then(|| {
+            *v = toml::Value::String(
+              self
+                .root_dir
+                .join(v.as_str().unwrap())
+                .to_string_lossy()
+                .to_string(),
+            )
+          })
+        });
+      })
+    };
 
-    cargo
+    if let Some(v) = cargo
       .get_mut("workspace")
       .and_then(|v| v.get_mut("dependencies"))
-      .and_then(|v| v.is_table().then(|| v.as_table_mut().unwrap()))
-      .and_then(|v| {
-        Some(v.iter_mut().for_each(|item| {
-          item.1.get_mut("path").and_then(|v| {
-            v.is_str().then(|| {
-              *v = toml::Value::String(
-                self
-                  .root_dir
-                  .join(v.as_str().unwrap())
-                  .to_string_lossy()
-                  .to_string(),
-              )
-            })
-          });
-        }))
-      });
+      .and_then(|v| v.as_table_mut())
+    {
+      v.iter_mut().for_each(|item| {
+        item.1.get_mut("path").and_then(|v| {
+          v.is_str().then(|| {
+            *v = toml::Value::String(
+              self
+                .root_dir
+                .join(v.as_str().unwrap())
+                .to_string_lossy()
+                .to_string(),
+            )
+          })
+        });
+      })
+    };
     cargo
       .get_mut("workspace")
       .and_then(|v| v.get_mut("members"))
       .and_then(|v| v.is_array().then(|| *v = toml::Value::Array(vec![])));
 
-    cargo.as_table_mut().map(|t| {
+    if let Some(t) = cargo.as_table_mut() {
       let src_path = self.src_path.to_string_lossy();
       let lib = {
         let mut lib = Map::new();
         let name = self.files().lib().name();
         lib.insert(
           "crate-type".into(),
-          toml::Value::Array(vec!["cdylib".into(), "rlib".into()]),
+          toml::Value::Array(vec!["cdylib".into()]),
         );
         lib.insert("path".into(), src_path.to_string().into());
         lib.insert("name".into(), name.into());
@@ -229,7 +227,7 @@ impl HotProject {
 
       t.insert("lib".into(), lib.into());
       t.insert("bin".into(), bin.into());
-    });
+    };
 
     write_file(
       &self.hot_dir.join("Cargo.toml"),
@@ -241,8 +239,10 @@ impl HotProject {
   /// Scaffolds the entire hot project on disk: creates directories, the rewrite
   /// `Cargo.toml`, the wrapper source, build script, and persisted project data.
   pub fn init_hot_project(&self) -> Result<()> {
-    std::fs::create_dir_all(&self.files().lib().lib_clone_dir())?;
-    std::fs::create_dir_all(&self.files().workspace().cargo_config_dir())?;
+    std::fs::create_dir_all(self.files().lib().lib_clone_dir())?;
+    std::fs::create_dir_all(self.files().workspace().cargo_config_dir())?;
+    std::fs::create_dir_all(self.files().data_dir())?;
+    std::fs::create_dir_all(self.files().data().sock_dir())?;
     std::fs::create_dir_all(&self.hot_dir)?;
 
     write_file(
@@ -259,7 +259,6 @@ impl HotProject {
       .as_str(),
     )?;
 
-    write_file(&self.files().lib().lib_version_txt_path(), "")?;
     write_file(
       &self.hot_dir.join("build.rs"),
       &format!(
@@ -270,7 +269,7 @@ impl HotProject {
 
     write_file(
       &self.files().data().project_data_path(),
-      toml::to_string(&HotProjectStore {
+      toml::to_string(&HotProjectStoreData {
         project: self.clone(),
         watch_src: HotLib::get_instance().watch_src.clone(),
       })
@@ -291,23 +290,25 @@ impl HotProject {
     {
       let root_lock = self.root_dir.join("Cargo.lock");
       std::fs::exists(&root_lock).map_or(Ok(()), |is_exists| {
-        is_exists
-          .then(|| link_file(&root_lock, &self.hot_dir.join("Cargo.lock")))
-          .unwrap_or(Ok(()))
+        if is_exists {
+          link_file(&root_lock, &self.hot_dir.join("Cargo.lock"))
+        } else {
+          Ok(())
+        }
       })
     }?;
 
     if self.is_workspace {
       let workspace_lock = self.workspace_dir.join("Cargo.lock");
       std::fs::exists(&workspace_lock).map_or(Ok(()), |is_exists| {
-        is_exists
-          .then(|| {
-            link_file(
-              &workspace_lock,
-              &self.hot_dir.parent().unwrap().join("Cargo.lock"),
-            )
-          })
-          .unwrap_or(Ok(()))
+        if is_exists {
+          link_file(
+            &workspace_lock,
+            &self.hot_dir.parent().unwrap().join("Cargo.lock"),
+          )
+        } else {
+          Ok(())
+        }
       })?;
       self.write_cargo_workspace()?;
     }
@@ -320,7 +321,7 @@ impl HotProject {
     let mut command = Command::new("cargo");
     let arg = command_args.unwrap_or_else(|| args().skip(1).collect());
     command
-      .args(&["run", "--bin", self.files().wrapper().name().as_str(), "--"])
+      .args(["run", "--bin", self.files().wrapper().name().as_str(), "--"])
       .args(arg)
       .current_dir(&self.hot_dir);
     command
@@ -329,14 +330,14 @@ impl HotProject {
   /// Builds a `Command` that runs the hot application binary directly.
   pub fn bin_target_command(&self) -> Command {
     let mut command = Command::new(self.files().hotbin().out_path());
-    command.current_dir(&self.files().target_dir());
+    command.current_dir(self.files().target_dir());
     command
   }
 
   /// Builds a `Command` that compiles the hot project with `cargo build`.
   pub fn rebuild_command(&self) -> Command {
     let mut command = Command::new("cargo");
-    command.args(&["build"]).current_dir(&self.hot_dir);
+    command.args(["build"]).current_dir(&self.hot_dir);
     command
   }
 
@@ -353,37 +354,45 @@ impl HotProject {
     HotProjectFiles::new(self)
   }
 
-  /// Reads the current library version number (defaults to `0` if unreadable).
-  pub fn read_version(&self) -> u128 {
-    std::fs::read_to_string(self.files().lib().lib_version_txt_path())
-      .ok()
-      .and_then(|s| s.trim().parse::<u128>().ok())
-      .unwrap_or(0)
+  pub fn write_state(&self, state: HotProjectState) -> Option<()> {
+    std::fs::write(
+      self.files().data().project_state_path(),
+      toml::to_string(&state).ok()?,
+    )
+    .ok()
   }
 
   /// Snapshots the built library into a versioned clone and updates the version file.
   ///
   /// Silently ignores I/O failures; used after a successful rebuild in the watch loop.
-  pub fn clone_lib(&self) {
+  pub fn clone_lib(&self) -> Option<u128> {
     let build_version = SystemTime::now()
       .duration_since(UNIX_EPOCH)
       .unwrap()
       .as_millis();
-    std::fs::remove_dir_all(self.files().lib().lib_clone_dir()).ok();
-    std::fs::create_dir_all(self.files().lib().lib_clone_dir()).ok();
+
+    std::fs::remove_dir_all(self.files().lib().lib_clone_dir()).ok()?;
+    std::fs::create_dir_all(self.files().lib().lib_clone_dir()).ok()?;
     std::fs::rename(
       self.files().lib().out_path(),
       self.files().lib().lib_version_path(build_version),
     )
-    .ok()
-    .and_then(|_| {
-      std::fs::write(
-        self.files().lib().lib_version_txt_path(),
-        build_version.to_string(),
-      )
-      .ok()
-    });
+    .ok()?;
+    self.write_state(HotProjectState::BuildSuccess(build_version))?;
+    Some(build_version)
   }
+  pub fn read_state(state_path: &PathBuf) -> Option<HotProjectState> {
+    let content = std::fs::read_to_string(state_path).ok()?;
+    toml::from_str(&content).ok()
+  }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum HotProjectState {
+  SourceChanged,
+  Rebuilding,
+  BuildSuccess(u128),
+  BuildFailed,
 }
 
 /// Configuration for additional source paths to watch for changes.
@@ -394,7 +403,7 @@ pub struct HotProjectWatcherConfig {}
 impl HotProjectWatcherConfig {
   fn add_watch(&self, path: &str, recursive: bool) -> &Self {
     let path = clean_path(
-      Path::new(&HotLib::get_instance().project.root_dir)
+      Path::new(&HotLib::get_instance().project.src_path.parent().unwrap())
         .join(path)
         .as_path(),
     );

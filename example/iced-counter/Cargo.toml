@@ -1,0 +1,15 @@
+[package]
+name = "iced_counter"
+edition = "2024"
+version.workspace = true
+repository.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+hotfnl = { workspace = true, optional = true }
+iced = { version = "0.14.0", features = ["wayland"] }
+
+[features]
+default = ["hotfnl/default"]
+prod = ["hotfnl/prod"]
