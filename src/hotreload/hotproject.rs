@@ -1,7 +1,7 @@
 //! Hot-project scaffolding: generates the Cargo project, builds it, and holds path and
 //! rebuild logic for the hot-reload machinery.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -13,7 +13,7 @@ use crate::hotreload::fs_utils::clean_path;
 use crate::{
   HotLib,
   hotreload::{
-    fs_utils::{bin_name, link_file, write_file},
+    fs_utils::{bin_name, write_file},
     hotproject_files::HotProjectFiles,
   },
 };
@@ -33,9 +33,8 @@ pub struct HotProject {
   pub bin_path: PathBuf,
   /// Whether the user's crate is part of a Cargo workspace.
   pub is_workspace: bool,
-
-  /// The profile used for building the hot project (e.g., "debug" or "release").
-  pub profile: String,
+  /// Custom arguments passed to the hot project build command.
+  pub custom_args: Vec<String>,
 }
 
 /// Persisted state of the hot project, written to disk between runs.
@@ -242,7 +241,6 @@ impl HotProject {
     std::fs::create_dir_all(self.files().lib().lib_clone_dir())?;
     std::fs::create_dir_all(self.files().workspace().cargo_config_dir())?;
     std::fs::create_dir_all(self.files().data_dir())?;
-    std::fs::create_dir_all(self.files().data().sock_dir())?;
     std::fs::create_dir_all(&self.hot_dir)?;
 
     write_file(
@@ -276,6 +274,7 @@ impl HotProject {
       .unwrap()
       .as_str(),
     )?;
+
     write_file(
       &self.files().wrapper().src_path(),
       &format!(
@@ -287,31 +286,20 @@ impl HotProject {
     self.write_cargo_toml()?;
     write_file(&self.files().data().log_path(), "")?;
 
-    {
-      let root_lock = self.root_dir.join("Cargo.lock");
-      std::fs::exists(&root_lock).map_or(Ok(()), |is_exists| {
-        if is_exists {
-          link_file(&root_lock, &self.hot_dir.join("Cargo.lock"))
-        } else {
-          Ok(())
-        }
-      })
-    }?;
-
     if self.is_workspace {
       let workspace_lock = self.workspace_dir.join("Cargo.lock");
-      std::fs::exists(&workspace_lock).map_or(Ok(()), |is_exists| {
-        if is_exists {
-          link_file(
-            &workspace_lock,
-            &self.hot_dir.parent().unwrap().join("Cargo.lock"),
-          )
-        } else {
-          Ok(())
-        }
-      })?;
+      std::fs::copy(
+        &workspace_lock,
+        self.hot_dir.parent().unwrap().join("Cargo.lock"),
+      )?;
       self.write_cargo_workspace()?;
-    }
+    } else {
+      let root_lock = self.workspace_dir.join("Cargo.lock");
+      std::fs::copy(
+        &root_lock,
+        self.hot_dir.parent().unwrap().join("Cargo.lock"),
+      )?;
+    };
     Ok(())
   }
 
@@ -337,16 +325,11 @@ impl HotProject {
   /// Builds a `Command` that compiles the hot project with `cargo build`.
   pub fn rebuild_command(&self) -> Command {
     let mut command = Command::new("cargo");
-    command.args(["build"]).current_dir(&self.hot_dir);
     command
-  }
-
-  /// Runs `cargo build` in the hot project and waits for completion.
-  pub fn rebuild(&self) -> Result<()> {
-    let mut child = self.rebuild_command().spawn()?;
-    let code = child.wait()?;
-    code.success().then_some(0).context("rebuild failed")?;
-    Ok(())
+      .args(["build"])
+      // .args(&self.custom_args)
+      .current_dir(&self.hot_dir);
+    command
   }
 
   /// Returns the computed hot-project file layout.
@@ -410,7 +393,6 @@ impl HotProjectWatcherConfig {
     HotLib::get_instance_mut().watch_src.insert(path, recursive);
     self
   }
-
   /// Watches `path` (non-recursively) for changes.
   pub fn watch(&self, path: &str) -> &Self {
     self.add_watch(path, false)

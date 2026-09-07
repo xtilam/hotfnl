@@ -1544,14 +1544,13 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 
 [[package]]
 name = "hotfnl"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "anyhow",
  "crossbeam-channel",
  "hotfnl-proc-macro",
  "inventory",
  "libloading 0.9.0",
- "nix 0.31.3",
  "notify",
  "paste",
  "postcard",
@@ -1561,7 +1560,7 @@ dependencies = [
 
 [[package]]
 name = "hotfnl-proc-macro"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1604,7 +1603,7 @@ dependencies = [
 
 [[package]]
 name = "iced_counter"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "hotfnl",
  "iced",
@@ -2113,7 +2112,7 @@ version = "1.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0aeb26bf5e836cc1c341c8106051b573f1766dfa05aa87f0b98be5e51b02303"
 dependencies = [
- "nix 0.29.0",
+ "nix",
  "winapi",
 ]
 
@@ -2281,18 +2280,6 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "memoffset",
-]
-
-[[package]]
-name = "nix"
-version = "0.31.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf20d2fde8ff38632c426f1165ed7436270b44f199fc55284c38276f9db47c3d"
-dependencies = [
- "bitflags 2.13.1",
- "cfg-if",
- "cfg_aliases",
- "libc",
 ]
 
 [[package]]
@@ -3924,7 +3911,7 @@ dependencies = [
  "libc",
  "log",
  "memmem",
- "nix 0.29.0",
+ "nix",
  "num-derive",
  "num-traits",
  "ordered-float",

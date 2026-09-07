@@ -9,7 +9,7 @@ use crate::hotreload::{
   macro_utils::bselect,
 };
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use postcard::to_allocvec;
 use std::{
   os::unix::net::UnixDatagram,
@@ -19,9 +19,8 @@ use std::{
 };
 
 pub fn app(data_path: &str) {
-  if let Err(e) = HotProjectServer::new(data_path).map(|s| s.run()) {
-    panic!("HotProjectServer failed: {:?}", e);
-  };
+  let server = HotProjectServer::new(data_path).unwrap();
+  server.run().unwrap();
 }
 
 pub struct HotProjectServer {
@@ -41,7 +40,6 @@ impl HotProjectServer {
     watch_src.files = store.watch_src;
     let sock_path = store.project.files().data().project_sock_path();
 
-    std::fs::remove_file(&sock_path).ok();
     let fd = UnixDatagram::unbound()?;
     Ok(HotProjectServer {
       watch_src,
@@ -68,14 +66,49 @@ impl HotProjectServer {
         .collect::<Vec<_>>()
         .join("")
     );
+
     let mut is_src_changed = false;
-    let mut need_restart = true;
+    let mut restart_count = 1;
     let mut rebuild_task = None::<Child>;
     let mut app_task = None::<Child>;
+
+    let mut cargo_watcher = FileWatcher::new();
+    for f in {
+      let mut files = vec![self.project.root_dir.join("Cargo.toml")];
+      if self.project.is_workspace {
+        files.push(self.project.workspace_dir.join("Cargo.toml"));
+        files.push(self.project.workspace_dir.join("Cargo.lock"));
+      } else {
+        files.push(self.project.root_dir.join("Cargo.lock"));
+      }
+      files
+    } {
+      if !std::fs::exists(&f).unwrap() {
+        panic!("{:?} not exists", f);
+      };
+      cargo_watcher.files.insert(f.clone(), false);
+    }
+    let (_, cargo_watch_rx) = cargo_watcher.new_channel();
+    cargo_watcher.run();
 
     loop {
       use HotProjectState::*;
       bselect!(
+        [recv(cargo_watch_rx), |evt| {
+          if let Ok(evt) = evt
+            && evt.kind.is_modify()
+          {
+            if let Some(mut child) = rebuild_task.take() {
+              child.kill().ok();
+              child.wait().ok();
+            };
+            if let Some(mut child) = app_task.take() {
+              child.kill().ok();
+              child.wait().ok();
+            };
+            bail!("{:?} changed", evt.paths);
+          };
+        }],
         [recv(src_change_rx), |evt| {
           if !is_src_changed
             && let Ok(evt) = evt
@@ -105,36 +138,34 @@ impl HotProjectServer {
               .stderr(Stdio::null())
               .spawn()
               .ok();
-            need_restart = false;
             is_src_changed = false;
             continue;
           };
 
-          if let Some(child) = rebuild_task.as_mut()
-            && let Ok(Some(status)) = child.try_wait()
-          {
-            if status.success()
-              && let Some(version) = self.project.clone_lib()
-            {
-              need_restart = true;
-              self.send_state(BuildSuccess(version));
-            } else {
-              self.send_state(BuildFailed);
+          if let Some(child) = rebuild_task.as_mut() {
+            if let Ok(Some(status)) = child.try_wait() {
+              if status.success()
+                && let Some(version) = self.project.clone_lib()
+              {
+                restart_count = 2;
+                self.send_state(BuildSuccess(version));
+              } else {
+                self.send_state(BuildFailed);
+              }
+              rebuild_task.take();
             }
-            rebuild_task.take();
+            continue;
           };
 
           match app_task.as_mut() {
             Some(child) => {
               if let Ok(Some(_)) = child.try_wait() {
                 app_task.take();
-                std::fs::remove_file(&self.sock_path).ok();
               }
             }
             None => {
-              if need_restart {
-                std::fs::remove_file(&self.sock_path).ok();
-                need_restart = false;
+              if restart_count > 0 {
+                restart_count -= 1;
                 app_task = self
                   .project
                   .bin_target_command()

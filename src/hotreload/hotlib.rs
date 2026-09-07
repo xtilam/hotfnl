@@ -96,6 +96,7 @@ impl Default for HotLib {
     }
   }
 }
+
 impl HotLib {
   /// Creates a fresh, unconfigured hot-reload engine.
   /// Replaces the singleton instance with a provided one.
@@ -234,6 +235,7 @@ impl HotLib {
     let fifo_path = self.project.files().data().project_sock_path();
     self.tx = tx.clone();
     std::thread::spawn(move || {
+      std::fs::remove_file(&fifo_path).ok();
       let fd = UnixDatagram::bind(fifo_path).expect("Failed to bind to socket");
       let evt = Self::get_instance().event.clone();
       loop {

@@ -8,7 +8,7 @@ license.workspace = true
 authors.workspace = true
 
 [workspace.package]
-version = "0.1.3"
+version = "0.1.4"
 repository = "https://github.com/xtilam/hotfnl"
 license = "MIT"
 authors = ["ztilam60@gmail.com"]
@@ -29,7 +29,6 @@ anyhow = { version = "1.0.104" }
 serde = { version = "1.0.229", features = ["derive"] }
 paste = { version = "1.0.15" }
 crossbeam-channel = { version = "0.5.16" }
-nix = { version = "0.31.3", features = ["fs"] }
 hotfnl = { path = "." }
 inventory = "0.3.24"
 postcard = { version = "1.1.3", features = ["alloc"] }
@@ -39,12 +38,11 @@ libloading = { workspace = true, optional = true }
 notify = { workspace = true, optional = true }
 toml = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
-hotfnl-proc-macro = { version = "0.1.3", path = "packages/hotfnl-proc-macro", optional = true }
+hotfnl-proc-macro = { version = "0.1.4", path = "packages/hotfnl-proc-macro", optional = true }
 paste = { workspace = true, optional = true }
 crossbeam-channel = { workspace = true, optional = true }
 anyhow = { workspace = true }
 inventory = { workspace = true, optional = true }
-nix = { workspace = true }
 postcard.workspace = true
 
 [features]
@@ -60,3 +58,7 @@ default = [
 ]
 
 prod = ["hotfnl-proc-macro/prod"]
+
+[profile.dev]
+debug = 0
+strip = true

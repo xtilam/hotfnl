@@ -112,7 +112,6 @@ use_prefix!(HotData {
   project_state_path: |self: &Self| -> PathBuf {
     self.files().data_dir().join("project_state.toml")
   },
-  sock_dir: |self: &Self| -> PathBuf { self.files().data_dir().join("sock") },
   project_sock_path: |self: &Self| -> PathBuf { self.files().data_dir().join("project.sock") },
 });
 

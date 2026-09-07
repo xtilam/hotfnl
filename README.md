@@ -2,6 +2,9 @@
 
 A lightweight **hot function swapping** library for Rust applications on Linux.
 
+![Image](https://github.com/user-attachments/assets/34e6f15e-e629-4a8b-b431-085f7e49deeb)
+<img src="https://github.com/user-attachments/assets/34e6f15e-e629-4a8b-b431-085f7e49deeb" width="720px">
+
 `hotfnl` lets you replace individual function implementations at runtime without
 restarting your application. When a source file changes, `hotfnl` recompiles the project
 into a dynamic library (`.so`), loads it, and swaps the function pointers of the functions

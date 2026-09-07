@@ -242,64 +242,64 @@ pub fn hot_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     );
 
     let self_param: Pat = syn::parse_quote!(self);
-    let (_prefix, self_static) = {
-      use proc_macro::TokenTree::*;
-      use proc_macro::token_stream::IntoIter;
-      struct Data {
-        iter: IntoIter,
-        prefix: String,
-        generic: String,
-      }
-      let mut rs = Data {
-        iter: attr.clone().into_iter(),
-        prefix: String::new(),
-        generic: String::from("<>"),
-      };
-      impl Data {
-        fn generic_cb(&mut self) -> Option<()> {
-          if let Punct(p) = self.iter.next()?
-            && p.as_char() == '='
-            && let Punct(p) = self.iter.next()?
-            && p.as_char() == '<'
-          {
-            let mut list = vec!["<".to_string()];
-            let mut open = 1;
-            while open > 0 {
-              let token = self.iter.next()?;
-              list.push(token.to_string());
-              if let Punct(p) = token {
-                match p.as_char() {
-                  '<' => open += 1,
-                  '>' => open -= 1,
-                  _ => {}
-                };
-              };
-            }
-            self.generic = list.join(" ");
-          };
-          self.next()
-        }
-        fn prefix_cb(&mut self) -> Option<()> {
-          if let Punct(p) = self.iter.next()?
-            && p.as_char() == '='
-            && let Literal(l) = self.iter.next()?
-          {
-            self.prefix = l.to_string();
-          };
-          self.next()
-        }
-        fn next(&mut self) -> Option<()> {
-          let i = self.iter.next()?;
-          match i.to_string().as_str() {
-            "prefix" => self.prefix_cb(),
-            "generic" => self.generic_cb(),
-            _ => self.next(),
-          }
-        }
-      }
-      rs.next();
-      (rs.prefix, format!("{}::{}", self_name, rs.generic))
-    };
+    // let (_prefix, self_static) = {
+    //   use proc_macro::TokenTree::*;
+    //   use proc_macro::token_stream::IntoIter;
+    //   struct Data {
+    //     iter: IntoIter,
+    //     prefix: String,
+    //     generic: String,
+    //   }
+    //   let mut rs = Data {
+    //     iter: attr.clone().into_iter(),
+    //     prefix: String::new(),
+    //     generic: String::from("<>"),
+    //   };
+    //   impl Data {
+    //     fn generic_cb(&mut self) -> Option<()> {
+    //       if let Punct(p) = self.iter.next()?
+    //         && p.as_char() == '='
+    //         && let Punct(p) = self.iter.next()?
+    //         && p.as_char() == '<'
+    //       {
+    //         let mut list = vec!["<".to_string()];
+    //         let mut open = 1;
+    //         while open > 0 {
+    //           let token = self.iter.next()?;
+    //           list.push(token.to_string());
+    //           if let Punct(p) = token {
+    //             match p.as_char() {
+    //               '<' => open += 1,
+    //               '>' => open -= 1,
+    //               _ => {}
+    //             };
+    //           };
+    //         }
+    //         self.generic = list.join(" ");
+    //       };
+    //       self.next()
+    //     }
+    //     fn prefix_cb(&mut self) -> Option<()> {
+    //       if let Punct(p) = self.iter.next()?
+    //         && p.as_char() == '='
+    //         && let Literal(l) = self.iter.next()?
+    //       {
+    //         self.prefix = l.to_string();
+    //       };
+    //       self.next()
+    //     }
+    //     fn next(&mut self) -> Option<()> {
+    //       let i = self.iter.next()?;
+    //       match i.to_string().as_str() {
+    //         "prefix" => self.prefix_cb(),
+    //         "generic" => self.generic_cb(),
+    //         _ => self.next(),
+    //       }
+    //     }
+    //   }
+    //   rs.next();
+    //   (rs.prefix, format!("{}::{}", self_name, rs.generic))
+    // };
     for item in &mut input.items {
       let syn::ImplItem::Fn(method) = item else {
         continue;
@@ -355,7 +355,8 @@ pub fn hot_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
       };
       let method_name_str = format!(
-        "{}::{}::({})->{}",
+        "{}::{}::{}::({})->{}",
+        attr,
         self_name,
         method_name,
         args_types
@@ -366,7 +367,7 @@ pub fn hot_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         ret
       );
 
-      let method_static = format!("{}::{}", self_static, method_hot_name);
+      let method_static = format!("{}::{}", self_name, method_hot_name);
       let mm_static: TokenStream2 = method_static.parse().unwrap();
 
       method.block = syn::parse_quote!({

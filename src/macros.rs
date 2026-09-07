@@ -56,4 +56,14 @@ macro_rules! use_local_event {
   };
 }
 
-
+/// Configures additional cargo arguments to pass to the hot-reload runtime.
+///
+/// No-op in `prod` builds.
+#[macro_export]
+macro_rules! use_cargo_args {
+  ($($body:tt)*) => {
+    hotfnl::if_hot! {{
+      hotfnl::add_cargo_args([$($body)*]);
+    }}
+  };
+}

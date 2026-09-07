@@ -24,12 +24,11 @@ pub use hotlib::{HotLib, PatchErr, get_fn_idx, get_fn_list};
 pub use hotproject::HotProjectWatcherConfig;
 pub use wrapper::*;
 
-/// Triggers a library reload by sending a `HotLibAction::ReloadLib` to the hot-reload
-/// loop. Failures are ignored.
-pub fn reload_lib() {
-  HotLib::get_instance()
-    .trigger(hotlib::HotLibAction::ReloadLib)
-    .ok();
+pub fn add_cargo_args(args: impl IntoIterator<Item = impl Into<String>>) {
+  let projects = &mut HotLib::get_instance_mut().project;
+  args.into_iter().for_each(|s| {
+    projects.custom_args.push(s.into());
+  })
 }
 
 /// Triggers a full application restart by exiting the current process. The hot-reload
@@ -56,8 +55,8 @@ pub fn get_events() -> sync::Arc<sync::RwLock<HotLibEvent>> {
 /// and spawns the background watcher loop.
 pub fn run() -> Result<()> {
   if !HotLib::get_instance().is_hot_project {
-    HotLib::get_instance().project.init_hot_project()?;
-    hot_run()?;
+    HotLib::get_instance().project.init_hot_project().unwrap();
+    hot_run().unwrap();
   }
   HotLib::get_instance_mut().run_watch_lib();
 
@@ -78,7 +77,7 @@ fn hot_run() -> Result<()> {
       .wrapper()
       .bin_path(),
   )
-  .args(args().skip(1))
+  .args(args())
   .exec();
   Ok(())
 }
