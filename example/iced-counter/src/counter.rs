@@ -101,14 +101,6 @@ impl Counter {
 
   #[hot_method]
   pub fn view(&self) -> Element<'_, Message> {
-    #[dev]
-    if self.is_patching {
-      return text("Rebuilding...")
-        .size(50)
-        .width(Length::Fill)
-        .center()
-        .into();
-    };
     let str = self.string_view.view();
     let number = self.number_view.view();
     column![
