@@ -27,16 +27,23 @@ pub fn main() -> iced::Result {
             .on_source_changed({
               let sender = sender.clone();
               move || {
-                println!("Source changed, rebuilding...");
                 let mut sender = sender.clone();
                 sender.try_send(Rebuild).ok();
+              }
+            })
+            .on_rebuild_error({
+              let sender = sender.clone();
+              move || {
+                let mut sender = sender.clone();
+                sender.try_send(PatchFailed).ok();
+                println!("Rebuild failed");
               }
             })
             .on_patch_success({
               let sender = sender.clone();
               move || {
                 let mut sender = sender.clone();
-                sender.try_send(PatchOk).ok();
+                sender.try_send(PatchSuccess).ok();
               }
             }));
 
