@@ -48,12 +48,3 @@ pub fn write_file(path: &PathBuf, content: &str) -> Result<()> {
     })
     .unwrap_or(Ok(()))
 }
-
-// Creates a symlink at `dst` pointing to `src`, replacing any existing `dst`.
-// pub fn link_file(src: &PathBuf, dst: &PathBuf) -> Result<()> {
-//   if dst.exists() {
-//     std::fs::remove_file(dst)?;
-//   }
-//   std::os::unix::fs::symlink(src, dst)?;
-//   Ok(())
-// }

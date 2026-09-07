@@ -327,7 +327,7 @@ impl HotProject {
     let mut command = Command::new("cargo");
     command
       .args(["build"])
-      // .args(&self.custom_args)
+      .args(&self.custom_args)
       .current_dir(&self.hot_dir);
     command
   }

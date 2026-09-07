@@ -31,13 +31,6 @@ pub fn add_cargo_args(args: impl IntoIterator<Item = impl Into<String>>) {
   })
 }
 
-/// Triggers a full application restart by exiting the current process. The hot-reload
-pub fn restart() {
-  if HotLib::get_instance().lib.read().unwrap().is_some() {
-    std::process::exit(0);
-  }
-}
-
 /// Boots the hot-reload system with the set of hot-swappable functions gathered from
 /// the [`crate::inventory`] registry.
 ///

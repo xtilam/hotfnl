@@ -53,6 +53,8 @@
 //! compilation without writing `cfg` attributes manually.
 mod macros;
 pub use hotfnl_proc_macro::*;
+
+#[cfg(not(feature = "prod"))]
 pub use inventory;
 
 #[cfg(not(feature = "prod"))]

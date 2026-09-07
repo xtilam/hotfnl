@@ -147,7 +147,13 @@ impl HotProjectServer {
               if status.success()
                 && let Some(version) = self.project.clone_lib()
               {
-                restart_count = 2;
+                restart_count = if let Some(task) = app_task.as_mut()
+                  && let Ok(None) = task.try_wait()
+                {
+                  1
+                } else {
+                  2
+                };
                 self.send_state(BuildSuccess(version));
               } else {
                 self.send_state(BuildFailed);
