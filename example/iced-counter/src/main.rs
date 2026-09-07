@@ -10,7 +10,8 @@ pub fn main() -> iced::Result {
   let app = iced::application(
     Counter::boot,
     Counter::update,
-    match_hot!({ Counter::hot_view }, { Counter::view }),
+    Counter::view,
+    // match_hot!({ Counter::hot_view }, { Counter::view }),
   );
   match_hot![{
     let app = app.subscription(|_| {

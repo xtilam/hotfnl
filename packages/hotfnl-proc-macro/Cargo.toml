@@ -2,7 +2,7 @@
 name = "hotfnl-proc-macro"
 description = "Proc macro for hotfnl"
 edition = "2024" 
-version = "0.1.4" 
+version = "0.1.5" 
 repository.workspace = true
 license.workspace = true
 authors.workspace = true

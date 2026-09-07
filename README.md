@@ -76,7 +76,7 @@ set, the binary was built by the generated hot project and scaffolding is skippe
 - `Cargo.lock` is **copied** (not symlinked) into the hot project. This avoids a build lock
   when `cargo build` runs while the main binary is also being managed, and lets the hot
   project share the main binary's `target` directory instead of inflating it.
-- A `project_data.toml` is written under `target/hotfnl/<bin-name>/data/` as the hand-off
+- A `project_data.toml` is written under `target/<profile>/hotfnl/<bin-name>/` as the hand-off
   for the wrapper.
 
 Three build targets are produced:

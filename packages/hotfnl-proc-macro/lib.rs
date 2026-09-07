@@ -187,7 +187,10 @@ pub fn hot_fn(attr: TokenStream, item: TokenStream) -> TokenStream {
               file_name: FILE_NAME,
             }
           }
-          callback_list.read().unwrap()[*IDX as usize](#(#arg_names),*)
+          let guard = callback_list.read().unwrap();
+          let result = guard[*IDX as usize](#(#arg_names),*); 
+          drop(guard);
+          result
         }
       }
     };
@@ -383,7 +386,10 @@ pub fn hot_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
             file_name: FILE_NAME,
           }
         }
-        callback_list.read().unwrap()[*IDX as usize](#(#args_names),*)
+        let guard = callback_list.read().unwrap();
+        let result = guard[*IDX as usize](#(#args_names),*);
+        drop(guard);
+        result
       });
 
       method_clone

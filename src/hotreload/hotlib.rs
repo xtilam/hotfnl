@@ -219,12 +219,11 @@ impl HotLib {
       .on_clean_up
       .iter()
       .for_each(|f| f());
-
     let old_lib = self.lib.write().unwrap().take();
+    *self.functions.write().unwrap() = list_fn;
     if let Some(e) = old_lib.and_then(|lib| lib.close().err()) {
       return Some(PatchErr::FailedCleanLib(e.to_string()));
     }
-    *self.functions.write().unwrap() = list_fn;
     self.lib.write().unwrap().replace(lib);
     None
   }
