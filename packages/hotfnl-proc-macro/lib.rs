@@ -188,7 +188,7 @@ pub fn hot_fn(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
           }
           let guard = callback_list.read().unwrap();
-          let result = guard[*IDX as usize](#(#arg_names),*); 
+          let result = guard[*IDX as usize](#(#arg_names),*);
           drop(guard);
           result
         }
@@ -475,4 +475,14 @@ pub fn hot_check(_attr: TokenStream, item: TokenStream) -> TokenStream {
   let mut cleaner = DevCleaner::default();
   cleaner.visit_item_mut(&mut input);
   quote!(#input).into()
+}
+/// Marks an item as only being compiled in non-prod builds.
+#[proc_macro_attribute]
+pub fn dev(_attr: TokenStream, item: TokenStream) -> TokenStream {
+  use quote::{quote};
+  let item = syn::parse_macro_input!(item as syn::Item);
+  quote! {
+    #[cfg(not(feature = "prod"))]
+    #item
+  }.into()
 }

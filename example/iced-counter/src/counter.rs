@@ -103,7 +103,6 @@ impl Counter {
       button("Increment").on_press(Message::Increment),
       text(self.value).size(20),
       button("Decrement").on_press(Message::Decrement),
-      button("Decrement").on_press(Message::Decrement),
       str,
       number,
     ]
