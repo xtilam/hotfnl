@@ -5,6 +5,7 @@
 
 use crate::hotreload::{
   file_watcher::FileWatcher,
+  files,
   hotproject::{HotProject, HotProjectState, HotProjectStoreData},
   macro_utils::bselect,
 };
@@ -38,7 +39,7 @@ impl HotProjectServer {
     };
     let mut watch_src = FileWatcher::new();
     watch_src.files = store.watch_src;
-    let sock_path = store.project.files().data().project_sock_path();
+    let sock_path = files::data::project_sock_path(&store.project);
 
     let fd = UnixDatagram::unbound()?;
     Ok(HotProjectServer {

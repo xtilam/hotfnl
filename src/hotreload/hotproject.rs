@@ -13,8 +13,8 @@ use crate::hotreload::fs_utils::clean_path;
 use crate::{
   HotLib,
   hotreload::{
+    files,
     fs_utils::{bin_name, write_file},
-    hotproject_files::HotProjectFiles,
   },
 };
 
@@ -92,7 +92,7 @@ impl HotProject {
       .and_then(|v| v.get_mut("members"))
       && v.is_array()
     {
-      *v = toml::Value::Array(vec![format!("./{}", self.files().bin_name()).into()]);
+      *v = toml::Value::Array(vec![format!("./{}", files::bin_name(self)).into()]);
     };
 
     if let Some(v) = cargo.get_mut("workspace")
@@ -131,12 +131,9 @@ impl HotProject {
         });
       })
     };
+    write_file(&files::workspace::cargo_toml(self), toml::to_string(&cargo)?.as_str())?;
     write_file(
-      &self.files().workspace().cargo_toml(),
-      toml::to_string(&cargo)?.as_str(),
-    )?;
-    write_file(
-      &self.files().workspace().main_rs(),
+      &files::workspace::main_rs(self),
       "fn main() { println!(\"Hello, world!\"); }",
     )?;
     Ok(())
@@ -196,7 +193,7 @@ impl HotProject {
       let src_path = self.src_path.to_string_lossy();
       let lib = {
         let mut lib = Map::new();
-        let name = self.files().lib().name();
+        let name = files::lib::name(self);
         lib.insert(
           "crate-type".into(),
           toml::Value::Array(vec!["cdylib".into()]),
@@ -208,17 +205,16 @@ impl HotProject {
       let bin: toml::value::Array = vec![
         {
           let mut bin = Map::new();
-          bin.insert("name".into(), self.files().hotbin().name().into());
+          bin.insert("name".into(), files::hotbin::name(self).into());
           bin.insert("path".into(), src_path.to_string().into());
           bin.into()
         },
         {
           let mut bin = Map::new();
-          let wrapper = self.files().wrapper();
-          bin.insert("name".into(), wrapper.name().into());
+          bin.insert("name".into(), files::wrapper::name(self).into());
           bin.insert(
             "path".into(),
-            wrapper.src_path().to_string_lossy().to_string().into(),
+            files::wrapper::src_path(self).to_string_lossy().to_string().into(),
           );
           bin.into()
         },
@@ -238,21 +234,16 @@ impl HotProject {
   /// Scaffolds the entire hot project on disk: creates directories, the rewrite
   /// `Cargo.toml`, the wrapper source, build script, and persisted project data.
   pub fn init_hot_project(&self) -> Result<()> {
-    std::fs::create_dir_all(self.files().lib().lib_clone_dir())?;
-    std::fs::create_dir_all(self.files().workspace().cargo_config_dir())?;
-    std::fs::create_dir_all(self.files().data_dir())?;
+    std::fs::create_dir_all(files::lib::lib_clone_dir(self))?;
+    std::fs::create_dir_all(files::workspace::cargo_config_dir(self))?;
+    std::fs::create_dir_all(files::data_dir(self))?;
     std::fs::create_dir_all(&self.hot_dir)?;
 
     write_file(
-      &self.files().workspace().cargo_config_file(),
+      &files::workspace::cargo_config_file(self),
       format!(
         "[build]\ntarget-dir = \"{}\"",
-        self
-          .files()
-          .target_dir()
-          .parent()
-          .unwrap()
-          .to_string_lossy()
+        files::target_dir(self).parent().unwrap().to_string_lossy()
       )
       .as_str(),
     )?;
@@ -266,7 +257,7 @@ impl HotProject {
     )?;
 
     write_file(
-      &self.files().data().project_data_path(),
+      &files::data::project_data_path(self),
       toml::to_string(&HotProjectStoreData {
         project: self.clone(),
         watch_src: HotLib::get_instance().watch_src.clone(),
@@ -276,15 +267,15 @@ impl HotProject {
     )?;
 
     write_file(
-      &self.files().wrapper().src_path(),
+      &files::wrapper::src_path(self),
       &format!(
         r#"fn main() {{ hotfnl::app({:?}); }}"#,
-        self.files().data().project_data_path()
+        files::data::project_data_path(self)
       ),
     )?;
 
     self.write_cargo_toml()?;
-    write_file(&self.files().data().log_path(), "")?;
+    write_file(&files::data::log_path(self), "")?;
 
     if self.is_workspace {
       let workspace_lock = self.workspace_dir.join("Cargo.lock");
@@ -309,7 +300,7 @@ impl HotProject {
     let mut command = Command::new("cargo");
     let arg = command_args.unwrap_or_else(|| args().skip(1).collect());
     command
-      .args(["run", "--bin", self.files().wrapper().name().as_str(), "--"])
+      .args(["run", "--bin", files::wrapper::name(self).as_str(), "--"])
       .args(arg)
       .current_dir(&self.hot_dir);
     command
@@ -317,8 +308,8 @@ impl HotProject {
 
   /// Builds a `Command` that runs the hot application binary directly.
   pub fn bin_target_command(&self) -> Command {
-    let mut command = Command::new(self.files().hotbin().out_path());
-    command.current_dir(self.files().target_dir());
+    let mut command = Command::new(files::hotbin::out_path(self));
+    command.current_dir(files::target_dir(self));
     command
   }
 
@@ -332,14 +323,9 @@ impl HotProject {
     command
   }
 
-  /// Returns the computed hot-project file layout.
-  pub fn files(&self) -> HotProjectFiles<'_> {
-    HotProjectFiles::new(self)
-  }
-
   pub fn write_state(&self, state: HotProjectState) -> Option<()> {
     std::fs::write(
-      self.files().data().project_state_path(),
+      files::data::project_state_path(self),
       toml::to_string(&state).ok()?,
     )
     .ok()
@@ -354,11 +340,11 @@ impl HotProject {
       .unwrap()
       .as_millis();
 
-    std::fs::remove_dir_all(self.files().lib().lib_clone_dir()).ok()?;
-    std::fs::create_dir_all(self.files().lib().lib_clone_dir()).ok()?;
+    std::fs::remove_dir_all(files::lib::lib_clone_dir(self)).ok()?;
+    std::fs::create_dir_all(files::lib::lib_clone_dir(self)).ok()?;
     std::fs::rename(
-      self.files().lib().out_path(),
-      self.files().lib().lib_version_path(build_version),
+      files::lib::out_path(self),
+      files::lib::lib_version_path(self, build_version),
     )
     .ok()?;
     self.write_state(HotProjectState::BuildSuccess(build_version))?;

@@ -14,6 +14,7 @@ use std::{
 use crate::{
   HotLibEvent,
   hotreload::{
+    files,
     hotfn::HotFn,
     hotproject::{HotProject, HotProjectState},
   },
@@ -254,7 +255,7 @@ impl HotLib {
   /// Spawns the background watch loop.
   pub fn run_watch_lib(&mut self) {
     let (tx, _) = crossbeam_channel::unbounded();
-    let fifo_path = self.project.files().data().project_sock_path();
+    let fifo_path = files::data::project_sock_path(&self.project);
     self.tx = tx.clone();
     std::thread::spawn(move || {
       std::fs::remove_file(&fifo_path).ok();
@@ -275,11 +276,7 @@ impl HotLib {
               e.on_pre_rebuild.iter().for_each(|f| f());
             }
             HotProjectState::BuildSuccess(version) => {
-              let lib_path = Self::get_instance()
-                .project
-                .files()
-                .lib()
-                .lib_version_path(version);
+              let lib_path = files::lib::lib_version_path(&Self::get_instance().project, version);
               let e = evt.read().unwrap();
               e.on_pre_patch.iter().for_each(|f| f());
               match Self::get_instance().get_lib(lib_path) {

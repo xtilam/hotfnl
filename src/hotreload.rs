@@ -10,10 +10,10 @@ mod fs_utils;
 mod hotfn;
 mod hotlib;
 mod hotproject;
-mod hotproject_files;
 mod hotproject_server;
 mod macro_utils;
 mod wrapper;
+mod files;
 
 use std::{env::args, os::unix::process::CommandExt, process::Command, sync};
 
@@ -63,15 +63,9 @@ fn hot_run() -> Result<()> {
     .spawn()?
     .wait()?;
 
-  let _ = Command::new(
-    HotLib::get_instance_mut()
-      .project
-      .files()
-      .wrapper()
-      .bin_path(),
-  )
-  .args(args())
-  .exec();
+  let _ = Command::new(files::wrapper::bin_path(&HotLib::get_instance().project))
+    .args(args())
+    .exec();
   Ok(())
 }
 
