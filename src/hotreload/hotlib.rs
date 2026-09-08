@@ -19,6 +19,33 @@ use crate::{
   },
 };
 
+struct AutoLib {
+  libs: [Option<libloading::Library>; 3],
+  idx: u8,
+}
+impl AutoLib {
+  fn new() -> Self {
+    Self {
+      libs: [None, None, None],
+      idx: 0,
+    }
+  }
+  fn add(&mut self, lib: libloading::Library) -> bool {
+    let old = self.libs[self.idx as usize].take();
+    self.libs[self.idx as usize] = Some(lib);
+    self.idx = (self.idx + 1) % 3;
+    println!(
+      "AutoLib: added new library, idx={:?}",
+      (self.idx, old.is_some())
+    );
+    if let Some(lib) = old {
+      !lib.close().is_err()
+    } else {
+      true
+    }
+  }
+}
+
 /// The central hot-reload engine.
 ///
 /// This is a process-wide singleton holding the currently loaded dynamic library, the
@@ -27,7 +54,7 @@ pub struct HotLib {
   /// Metadata about the generated hot project and its file layout.
   pub project: HotProject,
   /// The currently loaded dynamic library, if any.
-  pub lib: Arc<RwLock<Option<libloading::Library>>>,
+  lib: RwLock<AutoLib>,
   /// The active function-pointer table, patched on each reload.
   pub functions: Arc<RwLock<Vec<fn()>>>,
   /// Maps a function key (`file:name`) to its index in [`Self::functions`].
@@ -85,7 +112,7 @@ impl Default for HotLib {
     Self {
       is_hot_project: false,
       project: HotProject::default(),
-      lib: Arc::new(RwLock::new(None)),
+      lib: RwLock::new(AutoLib::new()),
       tx: crossbeam_channel::unbounded().0,
       functions_dict: BTreeMap::new(),
       functions: Arc::new(RwLock::new(Vec::new())),
@@ -219,12 +246,12 @@ impl HotLib {
       .on_clean_up
       .iter()
       .for_each(|f| f());
-    let old_lib = self.lib.write().unwrap().take();
     *self.functions.write().unwrap() = list_fn;
-    if let Some(e) = old_lib.and_then(|lib| lib.close().err()) {
-      return Some(PatchErr::FailedCleanLib(e.to_string()));
+    if !self.lib.write().unwrap().add(lib) {
+      return Some(PatchErr::FailedCleanLib(
+        "Failed to close previous library".to_string(),
+      ));
     }
-    self.lib.write().unwrap().replace(lib);
     None
   }
 

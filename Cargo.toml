@@ -8,7 +8,7 @@ license.workspace = true
 authors.workspace = true
 
 [workspace.package]
-version = "0.1.5"
+version = "0.1.6"
 repository = "https://github.com/xtilam/hotfnl"
 license = "MIT"
 authors = ["ztilam60@gmail.com"]

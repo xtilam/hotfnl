@@ -87,25 +87,22 @@ impl Counter {
     }
   }
 
-  #[dev]
-  pub fn hot_view(&self) -> Element<'_, Message> {
-    match self.is_patching {
-      true => text("Rebuilding...")
+  #[hot_method]
+  pub fn view(&self) -> Element<'_, Message> {
+    #[dev]
+    if self.is_patching {
+      return text("Rebuilding...")
         .size(50)
         .width(Length::Fill)
         .center()
-        .into(),
-      false => self.view(),
-    }
-  }
-
-  #[hot_method]
-  pub fn view(&self) -> Element<'_, Message> {
+        .into();
+    };
     let str = self.string_view.view();
     let number = self.number_view.view();
     column![
       button("Increment").on_press(Message::Increment),
       text(self.value).size(20),
+      button("Decrement").on_press(Message::Decrement),
       button("Decrement").on_press(Message::Decrement),
       str,
       number,

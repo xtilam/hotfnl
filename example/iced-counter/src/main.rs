@@ -7,11 +7,7 @@ mod counter;
 pub fn main() -> iced::Result {
   hotfnl::watch!(recursive("./").recursive("../../../src/"));
   hotfnl::run!();
-  let app = iced::application(
-    Counter::boot,
-    Counter::update,
-    match_hot!({ Counter::hot_view }, { Counter::view }),
-  );
+  let app = iced::application(Counter::boot, Counter::update, Counter::view);
   match_hot![{
     let app = app.subscription(|_| {
       use crate::counter::Message::{self, *};
