@@ -1,19 +1,20 @@
 # hotfnl
 
-A lightweight **hot function swapping** library for Rust applications on Linux.
+A lightweight **hot function swapping** library for Rust binary applications on Linux, designed for **development-time** use.
 
 ![Image](https://github.com/user-attachments/assets/34e6f15e-e629-4a8b-b431-085f7e49deeb)
 
-`hotfnl` lets you replace individual function implementations at runtime without
-restarting your application. When a source file changes, `hotfnl` recompiles the project
-into a dynamic library (`.so`), loads it, and swaps the function pointers of the functions
-you opt into.
+`hotfnl` works by compiling your project into a dynamic library (`.so`), loading it at
+runtime, and swapping the function pointers of annotated functions — all without
+restarting your application. When a source file changes, the library is recompiled and
+hot-swapped in place.
 
-> [!NOTE]
-> This is **not** full module hot-reloading (HMR). It only swaps function pointers for
-> annotated functions. It is inherently `unsafe`: the new library must contain functions
-> with byte-compatible signatures, and no ABI guarantee is enforced. Use it for
-> development-time iteration loops, not in production.
+> [!CAUTION]
+> This is inherently **unsafe**: swapping live function pointers requires the new
+> implementation to be byte-compatible with the original. No ABI guarantee is enforced.
+> Only **Linux** is supported. This library is for **Rust binary applications** and
+> intended for **development iteration only** — not for production use. When shipping,
+> enable the `prod` feature to strip out all hot-reload APIs with zero runtime overhead.
 
 ## Feature flags
 
@@ -23,8 +24,8 @@ you opt into.
 | `prod`    | All proc macros (`#[hot_main]`, `#[hot_fn]`, `#[hot_impl]`, `#[hot_method]`) become pass-through no-ops, and the hot-reload runtime is not compiled at all. Zero runtime overhead. |
 
 > [!NOTE]
-> `prod` inherits `default` by default. Use `--no-default-features --features prod` for a
-> truly minimal build. For item-level conditional compilation, pair `#[hot_check]` with
+> When both `default` and `prod` are enabled, `prod` takes precedence by turning all
+> proc macros into no-ops. For item-level conditional compilation, pair `#[hot_check]` with
 > `#[dev]` / `#[prod]` attributes, which are rewritten into the correct `cfg` gates in
 > whichever mode you build.
 
@@ -46,7 +47,7 @@ use hotfnl::{hot_fn, hot_main};
 #[hot_main]
 fn main() {
   hotfnl::watch!(watch("./"));
-  hotfnl::run!();
+  hotfnl::run!(); // the wrapper process is executed here
   loop {
     std::thread::sleep(std::time::Duration::from_secs(1));
     hello();
@@ -62,6 +63,24 @@ fn hello() {
 On first launch the app is scaffolded, built, and run through a wrapper binary. From then
 on, saving a source file triggers a rebuild and a live function-pointer swap — the app
 keeps running. See [How it works](#how-it-works) for the full lifecycle.
+
+## Installation
+
+Add `hotfnl` as an **optional** dependency and expose it through feature flags:
+
+```toml
+[dependencies]
+hotfnl = { version = "0.1", optional = true }
+
+[features]
+default = ["hotfnl/default"]
+prod = ["hotfnl/prod"]
+```
+
+| Command                            | Mode  | Effect                                        |
+|------------------------------------|-------|-----------------------------------------------|
+| `cargo run`                        | Dev   | Hot-reload enabled (default features).         |
+| `cargo build --release -F prod`    | Prod  | All proc macros become no-ops, zero runtime overhead. |
 
 ## How it works
 
@@ -137,8 +156,10 @@ change.
 
 ## Requirements
 
-- Linux (`hotfnl` uses `.so` dynamic libraries and `exec`).
+- Linux only (`hotfnl` uses `.so` dynamic libraries and `exec`).
 - Rust edition 2024.
+- Intended for **development-time** use only. For production, build with
+  `-F prod`.
 
 ## License
 
