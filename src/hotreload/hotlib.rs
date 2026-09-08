@@ -34,10 +34,6 @@ impl AutoLib {
     let old = self.libs[self.idx as usize].take();
     self.libs[self.idx as usize] = Some(lib);
     self.idx = (self.idx + 1) % 3;
-    println!(
-      "AutoLib: added new library, idx={:?}",
-      (self.idx, old.is_some())
-    );
     if let Some(lib) = old {
       !lib.close().is_err()
     } else {
