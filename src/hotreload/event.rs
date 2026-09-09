@@ -56,7 +56,6 @@ impl Drop for HotLibEventLocal {
       .remove(self.0);
   }
 }
-
 #[derive(Debug, Clone)]
 pub enum HotLibEvents {
   SourceChanged,
@@ -67,6 +66,15 @@ pub enum HotLibEvents {
   BuildSuccess,
   BuildFailed,
 }
+
+
+#[allow(clippy::derivable_impls)]
+impl Default for HotLibEvents {
+  fn default() -> Self {
+    HotLibEvents::PatchSuccess
+  }
+}
+
 // use crate::{HotLib, PatchErr, hotreload::macro_utils::make_fn};
 // use std::{
 //   collections::BTreeSet,
