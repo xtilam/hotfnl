@@ -16,9 +16,14 @@ use crate::{
   hotreload::{
     files,
     hotfn::HotFn,
-    hotproject::{HotProject, HotProjectState},
+    hotproject::{
+      HotProject,
+      HotProjectState::{self},
+    },
   },
 };
+
+use super::event::HotLibEvents;
 
 struct AutoLib {
   libs: [Option<libloading::Library>; 3],
@@ -85,7 +90,7 @@ pub enum PatchErr {
   /// The dynamic library could not be opened.
   FailedLoadLib,
   /// An existing library could not be closed/unloaded.
-  FailedCleanLib(String),
+  FailedCleanLib,
   /// The library does not export the required `hrl_get_functions` symbol.
   NoFnGetFunctions,
   /// The new library changed the set of functions (added or removed entries).
@@ -215,16 +220,12 @@ impl HotLib {
         map_fn.remove(&key);
         continue;
       }
-      lib
-        .close()
-        .map_err(|e| PatchErr::FailedCleanLib(e.to_string()))?;
+      lib.close().map_err(|_| PatchErr::FailedCleanLib)?;
       return Err(PatchErr::ToManyChange);
     }
 
     if !map_fn.is_empty() {
-      lib
-        .close()
-        .map_err(|e| PatchErr::FailedCleanLib(e.to_string()))?;
+      lib.close().map_err(|_| PatchErr::FailedCleanLib)?;
       return Err(PatchErr::ToManyChange);
     }
 
@@ -232,22 +233,12 @@ impl HotLib {
   }
   /// Swaps in a newly loaded library and its function table.
   ///
-  /// Runs `on_clean_up` callbacks, unloads the previous library, replaces the
   /// function-pointer table, and stores the new library. Returns `Some(PatchErr)` if the
   /// previous library could not be closed.
   pub fn apply_lib(&self, lib: libloading::Library, list_fn: Vec<fn()>) -> Option<PatchErr> {
-    self
-      .event
-      .read()
-      .unwrap()
-      .on_clean_up
-      .iter()
-      .for_each(|f| f());
     *self.functions.write().unwrap() = list_fn;
     if !self.lib.write().unwrap().add(lib) {
-      return Some(PatchErr::FailedCleanLib(
-        "Failed to close previous library".to_string(),
-      ));
+      return Some(PatchErr::FailedCleanLib);
     }
     None
   }
@@ -258,6 +249,7 @@ impl HotLib {
     let fifo_path = files::data::project_sock_path(&self.project);
     self.tx = tx.clone();
     std::thread::spawn(move || {
+      use HotLibEvents::{self as HLE};
       std::fs::remove_file(&fifo_path).ok();
       let fd = UnixDatagram::bind(fifo_path).expect("Failed to bind to socket");
       let evt = Self::get_instance().event.clone();
@@ -269,28 +261,28 @@ impl HotLib {
           match state {
             HotProjectState::SourceChanged => {
               let e = evt.read().unwrap();
-              e.on_source_changed.iter().for_each(|f| f());
+              e.trigger(HLE::SourceChanged);
             }
             HotProjectState::Rebuilding => {
               let e = evt.read().unwrap();
-              e.on_pre_rebuild.iter().for_each(|f| f());
+              e.trigger(HLE::StartRebuild);
             }
             HotProjectState::BuildSuccess(version) => {
               let lib_path = files::lib::lib_version_path(&Self::get_instance().project, version);
               let e = evt.read().unwrap();
-              e.on_pre_patch.iter().for_each(|f| f());
               match Self::get_instance().get_lib(lib_path) {
                 Ok((lib, list_fn)) => {
+                  e.trigger(HLE::CleanUp);
                   if Self::get_instance().apply_lib(lib, list_fn).is_some() {
                     std::process::exit(0);
                   }
-                  e.on_patch_success.iter().for_each(|f| f());
+                  e.trigger(HLE::PatchSuccess);
                 }
                 Err(err) => match err {
                   PatchErr::FailedLoadLib | PatchErr::NoFnGetFunctions | PatchErr::OtherError => {
-                    e.on_patch_error.iter().for_each(|f| f(err.clone()));
+                    e.trigger(HLE::PatchError);
                   }
-                  PatchErr::ToManyChange | PatchErr::FailedCleanLib(_) => {
+                  PatchErr::ToManyChange | PatchErr::FailedCleanLib => {
                     std::process::exit(0);
                   }
                 },
@@ -298,7 +290,7 @@ impl HotLib {
             }
             HotProjectState::BuildFailed => {
               let e = evt.read().unwrap();
-              e.on_rebuild_error.iter().for_each(|f| f());
+              e.trigger(HLE::BuildFailed);
             }
           };
         }

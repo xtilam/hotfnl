@@ -16,15 +16,10 @@ macro_rules! run {
 /// No-op in `prod` builds.
 #[macro_export]
 macro_rules! use_event {
-  ($($body:tt)*) => {
+  ($($body: tt)*) => {
     hotfnl::if_hot! {{
-      hotfnl::get_events()
-        .write()
-        .as_deref_mut()
-        .map(|e| {
-          e.$($body)*;
-        })
-        .ok();
+      use hotfnl::EventType::*;
+      hotfnl::HotLibEvent::global($($body)*);
     }}
   };
 }
@@ -48,10 +43,10 @@ macro_rules! watch {
 /// No-op in `prod` builds.
 #[macro_export]
 macro_rules! use_local_event {
-  (|$name:ident| $value:expr) => {
+  ($name:ident, $($body:tt)*) => {
     hotfnl::if_hot! {
-      let mut $name = hotfnl::new_event_list();
-      $value;
+      use hotfnl::EventType::*;
+      let $name = hotfnl::HotLibEvent::local($($body)*);
     }
   };
 }

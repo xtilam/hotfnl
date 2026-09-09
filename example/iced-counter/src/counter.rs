@@ -45,8 +45,6 @@ pub enum Message {
   Rebuild,
   #[dev]
   PatchSuccess,
-  #[dev]
-  PatchFailed,
   Increment,
   Decrement,
 }
@@ -69,6 +67,7 @@ impl Counter {
 
   #[hot_method]
   pub fn update(&mut self, message: Message) {
+    hotfnl::use_local_event!(ngu, |_evt| {});
     match message {
       Message::Increment => {
         self.value += 4;
@@ -81,7 +80,7 @@ impl Counter {
         self.is_patching = true;
       }
       #[dev]
-      Message::PatchSuccess | Message::PatchFailed => {
+      Message::PatchSuccess => {
         self.is_patching = false;
       }
     }
@@ -148,7 +147,7 @@ impl<T: std::fmt::Debug> CustomRender<T> {
   /// * **Conclusion:** Do đó, việc gọi trực tiếp qua luồng execution của `Counter::view`
   ///   là cách duy nhất để đảm bảo luôn dispatch đúng phiên bản generic fn mới nhất.
   fn view(&self) -> Element<'_, Message> {
-    text(format!("Custom Render: {:?}", self.data))
+    text(format!("Render: {:?}", self.data))
       .size(20)
       .width(Length::Fill)
       .center()

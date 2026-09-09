@@ -2,7 +2,7 @@
 name = "hotfnl"
 description = "A lightweight Rust library for dynamic library patching and hot-reloading on Linux"
 edition = "2024"
-version = "0.1.10"
+version = "0.2.0"
 repository.workspace = true
 license.workspace = true
 authors.workspace = true
@@ -37,7 +37,7 @@ libloading = { workspace = true, optional = true }
 notify = { workspace = true, optional = true }
 toml = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
-hotfnl-proc-macro = { version = "0.1.8", path = "packages/hotfnl-proc-macro", optional = true }
+hotfnl-proc-macro = { version = "0.2.0", path = "packages/hotfnl-proc-macro", optional = true }
 paste = { workspace = true, optional = true }
 crossbeam-channel = { workspace = true, optional = true }
 anyhow = { workspace = true , optional = true }

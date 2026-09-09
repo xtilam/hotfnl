@@ -10,7 +10,7 @@ pub fn main() -> iced::Result {
   let app = iced::application(Counter::boot, Counter::update, Counter::view);
   match_hot![{
     let app = app.subscription(|_| {
-      use crate::counter::Message::{self, *};
+      use crate::counter::Message::{self};
       use iced::{
         Subscription,
         futures::{Stream, channel::mpsc},
@@ -18,35 +18,20 @@ pub fn main() -> iced::Result {
       };
       fn callback() -> impl Stream<Item = Message> {
         stream::channel(100, async |mut output| {
-          let (sender, mut receiver) = mpsc::channel(100);
-          hotfnl::use_local_event!(|evt| evt
-            .on_source_changed({
-              let sender = sender.clone();
-              move || {
-                let mut sender = sender.clone();
-                sender.try_send(Rebuild).ok();
-              }
-            })
-            .on_rebuild_error({
-              let sender = sender.clone();
-              move || {
-                let mut sender = sender.clone();
-                sender.try_send(PatchFailed).ok();
-                println!("Rebuild failed");
-              }
-            })
-            .on_patch_success({
-              let sender = sender.clone();
-              move || {
-                let mut sender = sender.clone();
-                sender.try_send(PatchSuccess).ok();
-              }
-            }));
-
+          let (sender, mut receiver) = mpsc::unbounded::<hotfnl::EventType>();
+          hotfnl::use_local_event!(event_ptr, {
+            let sender = sender.clone();
+            move |event| {
+              sender.unbounded_send(event).ok();
+            }
+          });
           loop {
             use iced::futures::StreamExt;
-            let input = receiver.select_next_some().await;
-            output.try_send(input).ok();
+            match receiver.select_next_some().await {
+              SourceChanged | StartRebuild => output.try_send(Message::Rebuild).ok(),
+              PatchSuccess | PatchError => output.try_send(Message::PatchSuccess).ok(),
+              _ => Some(()),
+            };
           }
         })
       }

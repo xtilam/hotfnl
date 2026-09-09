@@ -23,12 +23,12 @@ impl Tui {
     use TuiAppAction::*;
     let (tx, rx_render) = crossbeam_channel::unbounded::<TuiAppAction>();
 
-    hotfnl::use_local_event!(|e| e.on_patch_success({
-      let tx = tx.clone();
-      move || {
-        tx.send(ReRender).ok();
-      }
-    }));
+    // hotfnl::use_local_event!(|e| e.on_patch_success({
+    //   let tx = tx.clone();
+    //   move || {
+    //     tx.send(ReRender).ok();
+    //   }
+    // }));
     let (tx_term, rx_term) = crossbeam_channel::unbounded();
     tx.send(ReRender).ok();
     std::thread::spawn({

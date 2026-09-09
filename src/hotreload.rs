@@ -6,6 +6,7 @@
 
 mod event;
 mod file_watcher;
+mod files;
 mod fs_utils;
 mod hotfn;
 mod hotlib;
@@ -13,12 +14,11 @@ mod hotproject;
 mod hotproject_server;
 mod macro_utils;
 mod wrapper;
-mod files;
 
 use std::{env::args, os::unix::process::CommandExt, process::Command, sync};
 
 use anyhow::Result;
-pub use event::{EventCallbackList, HotLibEvent};
+pub use event::{HotLibEvent, HotLibEvents as EventType};
 pub use hotfn::HotFn;
 pub use hotlib::{HotLib, PatchErr, get_fn_idx, get_fn_list};
 pub use hotproject::HotProjectWatcherConfig;
@@ -67,9 +67,4 @@ fn hot_run() -> Result<()> {
     .args(args())
     .exec();
   Ok(())
-}
-
-/// Returns a fresh, empty event callback list scoped to the shared event registry.
-pub fn new_event_list() -> EventCallbackList {
-  EventCallbackList::default()
 }
