@@ -43,7 +43,7 @@ pub mod wrapper {
 
 pub mod lib {
   use super::*;
-  name_fn!(name, |p| format!("hotfnl_{}", bin_name(p)));
+  name_fn!(name, |p| format!("hotfnl_{}", bin_name(p).replace('-', "_")));
   name_fn!(out_name, |p| format!("lib{}.so", name(p)));
   file_fn!(out_path, |p| target_dir(p).join(out_name(p)));
   file_fn!(lib_clone_dir, |p| data_dir(p).join("lib"));

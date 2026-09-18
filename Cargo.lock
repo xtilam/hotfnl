@@ -1544,7 +1544,7 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 
 [[package]]
 name = "hotfnl"
-version = "0.2.0"
+version = "0.1.12"
 dependencies = [
  "anyhow",
  "crossbeam-channel",
@@ -1584,6 +1584,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "iced-counter"
+version = "0.1.1"
+dependencies = [
+ "hotfnl",
+ "iced",
+]
+
+[[package]]
 name = "iced_core"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1599,14 +1607,6 @@ dependencies = [
  "smol_str",
  "thiserror 2.0.20",
  "web-time",
-]
-
-[[package]]
-name = "iced_counter"
-version = "0.1.1"
-dependencies = [
- "hotfnl",
- "iced",
 ]
 
 [[package]]
