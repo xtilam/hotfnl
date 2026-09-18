@@ -51,6 +51,22 @@
 //!
 //! Use `#[hot_check]` with `#[dev]` and `#[prod]` attributes for item-level conditional
 //! compilation without writing `cfg` attributes manually.
+//!
+//! # Layout stability
+//!
+//! Mark structs whose memory layout must stay stable across hot reloads with
+//! `#[hot_layout]`:
+//!
+//! ```ignore
+//! #[hot_layout]
+//! struct State {
+//!   value: i32,
+//! }
+//! ```
+//!
+//! A compile-time content hash is recorded at boot. If the struct definition changes in a
+//! rebuild, the mismatch makes the app quit so the wrapper can restart it with a fresh
+//! binary.
 mod macros;
 pub use hotfnl_proc_macro::*;
 

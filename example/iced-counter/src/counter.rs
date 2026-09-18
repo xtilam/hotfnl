@@ -1,7 +1,9 @@
-use hotfnl::{hot_check, hot_impl, hot_method};
+use hotfnl::{hot_check, hot_impl, hot_layout, hot_method};
 use iced::widget::{button, column, text};
 use iced::*;
 
+
+#[hot_layout]
 #[hot_check]
 pub struct Counter {
   value: i64,
@@ -58,6 +60,7 @@ impl Counter {
         value: 0,
         string_view: CustomRender::new("Hello".to_string()),
         number_view: CustomRender::new(42),
+        hello: 0,
         #[dev]
         is_patching: false,
       },

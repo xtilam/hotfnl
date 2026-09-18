@@ -19,7 +19,7 @@ use std::{env::args, os::unix::process::CommandExt, process::Command, sync};
 
 use anyhow::Result;
 pub use event::{HotLibEvent, HotLibEvents as EventType};
-pub use hotfn::HotFn;
+pub use hotfn::{HotFn, HotLayout};
 pub use hotlib::{HotLib, PatchErr, get_fn_idx, get_fn_list};
 pub use hotproject::HotProjectWatcherConfig;
 pub use wrapper::*;
@@ -35,8 +35,14 @@ pub fn add_cargo_args(args: impl IntoIterator<Item = impl Into<String>>) {
 /// the [`crate::inventory`] registry.
 ///
 /// This is normally invoked by the `#[hot_main]` proc macro.
-pub fn boot(is_hot_project: bool, fns: Vec<HotFn>, file_name: &str, project_dir: &str) {
-  HotLib::get_instance_mut().on_boot(is_hot_project, fns, file_name, project_dir);
+pub fn boot(
+  is_hot_project: bool,
+  fns: Vec<HotFn>,
+  layouts: Vec<HotLayout>,
+  file_name: &str,
+  project_dir: &str,
+) {
+  HotLib::get_instance_mut().on_boot(is_hot_project, fns, layouts, file_name, project_dir);
 }
 
 /// Returns the shared event registry, used to register lifecycle callbacks.

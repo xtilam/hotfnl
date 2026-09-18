@@ -13,6 +13,8 @@ tables** to swap code at runtime without restarting. Core engine lives in
 - `lib: AutoLib` — circular 3-slot store of loaded libraries; adding a new lib closes the old one.
 - `functions: Arc<RwLock<Vec<fn()>>>` — the active function-pointer table.
 - `functions_dict: BTreeMap<String, u16>` — maps key `file:name` → index into the table.
+- `layout_dict: BTreeMap<String, u64>` — maps struct key `file:name` → compile-time content
+  hash of its definition (baseline, from `#[hot_layout]`).
 - `backup_functions: Vec<fn()>` — original boot-time pointers, used as patch baseline.
 - `tx` — channel sending `HotLibAction` to the background watch loop.
 - `event` — lifecycle callbacks registry.
@@ -28,7 +30,8 @@ tables** to swap code at runtime without restarting. Core engine lives in
 
 On app start, `#[hot_main]` (generated) calls `hotfnl::boot(...)`:
 - Collects `HotFn` list from `inventory`.
-- `on_boot()` builds `functions_dict` (duplicate key → panic) and `backup_functions`.
+- Collects `HotLayout` list (struct fingerprint hashes) from `inventory`.
+- `on_boot()` builds `functions_dict` (duplicate key → panic), `layout_dict`, and `backup_functions`.
 - `run_watch_lib()` spawns a thread listening on a Unix datagram socket, receiving
   `HotProjectState` from the build process:
   - `SourceChanged` → `on_source_changed`
@@ -105,6 +108,10 @@ Notes:
    - Calls `hrl_get_functions(INSTANCE.clone())` → new library calls `rewrite_instance`.
    - Merges new `HotFn`s into a copy of `backup_functions` by key; if a key doesn't match
      (added/removed functions) → `PatchErr::ToManyChange` and closes the lib.
+   - Resolves `hrl_get_layouts` (optional; older libs are exempt). Compares each struct's
+     content hash against the boot-time `layout_dict` by key `file:name`. A missing key,
+     extra key, or hash mismatch (struct layout changed) → `PatchErr::ToManyChange` and
+     closes the lib, which makes the app exit so the wrapper respawns a freshly built binary.
 3. `apply_lib(lib, list_fn)` (`hotlib.rs:237`):
    - Runs `on_clean_up` callbacks (against old table, before the swap).
    - Writes new `list_fn` into `functions`.
@@ -116,6 +123,17 @@ Notes:
 - `get_fn_idx(fn_name, file_name)` (`hotlib.rs:317`) — panics if the key is unknown.
 - `get_fn_list<T>()` (`hotlib.rs:332`) — transmutes `Vec<fn()>` → `Vec<T>`; **unsafe**,
   caller must guarantee type layout matches.
+
+## `#[hot_layout]`
+
+Marks a struct whose layout must stay stable across reloads:
+- Proc macro fingerprints the whole struct definition (fields, types, generics, attrs)
+  with FNV-1a 64 and submits `crate::hot::HotLayout { file_name, struct_name, hash }`
+  via `inventory`.
+- `#[hot_main]` exports `hrl_get_layouts() -> Vec<HotLayout>` from the loaded library.
+- In `get_lib`, each fingerprint must match the boot-time `layout_dict` exactly
+  (same key + hash), else `PatchErr::ToManyChange` → app exits and the wrapper respawns
+  the freshly built binary.
 
 ## Invariants
 

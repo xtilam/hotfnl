@@ -15,7 +15,7 @@ use crate::{
   HotLibEvent,
   hotreload::{
     files,
-    hotfn::HotFn,
+    hotfn::{HotFn, HotLayout},
     hotproject::{
       HotProject,
       HotProjectState::{self},
@@ -61,6 +61,8 @@ pub struct HotLib {
   pub functions: Arc<RwLock<Vec<fn()>>>,
   /// Maps a function key (`file:name`) to its index in [`Self::functions`].
   pub functions_dict: BTreeMap<String, u16>,
+  /// Maps a struct key (`file:name`) to its compile-time content hash, captured at boot.
+  pub layout_dict: BTreeMap<String, u64>,
   /// The original function pointers captured at boot, used as a baseline for patching.
   pub backup_functions: Vec<fn()>,
   /// Channel used to send actions to the background watch loop.
@@ -117,6 +119,7 @@ impl Default for HotLib {
       lib: RwLock::new(AutoLib::new()),
       tx: crossbeam_channel::unbounded().0,
       functions_dict: BTreeMap::new(),
+      layout_dict: BTreeMap::new(),
       functions: Arc::new(RwLock::new(Vec::new())),
       backup_functions: Vec::new(),
       is_configured: false,
@@ -155,6 +158,7 @@ impl HotLib {
     &mut self,
     is_hot_project: bool,
     list_fn: Vec<HotFn>,
+    list_layout: Vec<HotLayout>,
     src_file: &str,
     manifest_dir: &str,
   ) {
@@ -180,6 +184,16 @@ impl HotLib {
     self.functions_dict = dict;
     self.backup_functions = functions.clone();
     self.functions = Arc::new(RwLock::new(functions));
+
+    let mut layout_dict = BTreeMap::new();
+    list_layout.iter().for_each(|l| {
+      let key = Self::to_key(l.struct_name, l.file_name);
+      if layout_dict.contains_key(&key) {
+        panic!("Duplicate layout: {}", key);
+      }
+      layout_dict.insert(key, l.hash);
+    });
+    self.layout_dict = layout_dict;
   }
   /// Builds the unique key (`file:name`) used to identify a hot function.
   pub fn to_key(fn_name: impl Into<String>, file_name: impl Into<String>) -> String {
@@ -227,6 +241,34 @@ impl HotLib {
     if !map_fn.is_empty() {
       lib.close().map_err(|_| PatchErr::FailedCleanLib)?;
       return Err(PatchErr::ToManyChange);
+    }
+
+    // Layout fingerprint check: a changed struct layout (`#[hot_layout]`) means the
+    // binary and the library disagree on memory layout, so require a full restart. Old
+    // libraries without `hrl_get_layouts` are exempt from the check.
+    let get_layouts = unsafe {
+      lib.get::<unsafe extern "C" fn() -> Vec<HotLayout>>(b"hrl_get_layouts")
+    };
+    if let Ok(get_layouts) = get_layouts {
+      let list_layout = unsafe { get_layouts() };
+      let mut map_layout = self.layout_dict.clone();
+      for l in list_layout {
+        let key = Self::to_key(l.struct_name, l.file_name);
+        match map_layout.get(&key) {
+          Some(hash) if *hash == l.hash => {
+            map_layout.remove(&key);
+            continue;
+          }
+          _ => {
+            lib.close().map_err(|_| PatchErr::FailedCleanLib)?;
+            return Err(PatchErr::ToManyChange);
+          }
+        }
+      }
+      if !map_layout.is_empty() {
+        lib.close().map_err(|_| PatchErr::FailedCleanLib)?;
+        return Err(PatchErr::ToManyChange);
+      }
     }
 
     Ok((lib, vec_fn))

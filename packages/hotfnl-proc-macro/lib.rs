@@ -1,11 +1,25 @@
 //! Procedural macros for [`hotfnl`](https://docs.rs/hotfnl).
 //!
-//! Provides `#[hot_main]`, `#[hot_fn]`, `#[hot_impl]`, `#[hot_method]`, and
-//! `#[hot_check]`. When the `prod` feature is enabled, all hot-reload macros become
+//! Provides `#[hot_main]`, `#[hot_fn]`, `#[hot_layout]`, `#[hot_impl]`, `#[hot_method]`,
+//! and `#[hot_check]`. When the `prod` feature is enabled, all hot-reload macros become
 //! pass-through no-ops that emit the original item unchanged. `#[hot_check]` always
 //! rewrites regardless of the feature flag.
 
 use proc_macro::TokenStream;
+
+/// FNV-1a 64-bit, used to fingerprint a struct's definition at compile time.
+///
+/// Deterministic across compilations so the boot-time baseline and the reloaded
+/// library's hash can be compared.
+#[cfg(not(feature = "prod"))]
+fn fnv1a_64(input: &str) -> u64 {
+  let mut hash: u64 = 0xcbf29ce484222325;
+  for byte in input.as_bytes() {
+    hash ^= *byte as u64;
+    hash = hash.wrapping_mul(0x100000001b3);
+  }
+  hash
+}
 
 #[cfg(not(feature = "prod"))]
 macro_rules! token_err {
@@ -58,8 +72,15 @@ pub fn hot_main(_attr: TokenStream, item: TokenStream) -> TokenStream {
             pub fn_name: &'static str,
             pub file_name: &'static str,
           }
+          #[derive(Debug)]
+          pub struct HotLayout {
+            pub file_name: &'static str,
+            pub struct_name: &'static str,
+            pub hash: u64,
+          }
         }
         hotfnl::inventory::collect!(crate::hot::HotFn);
+        hotfnl::inventory::collect!(crate::hot::HotLayout);
         #[unsafe(no_mangle)]
         pub extern "C" fn hrl_get_functions(lib: std::sync::Arc<std::sync::RwLock<hotfnl::HotLib>>) -> Vec<hotfnl::HotFn> {
           let mut list_fn: Vec<hotfnl::HotFn> = vec![];
@@ -73,6 +94,18 @@ pub fn hot_main(_attr: TokenStream, item: TokenStream) -> TokenStream {
           hotfnl::HotLib::rewrite_instance(lib);
           list_fn
         }
+        #[unsafe(no_mangle)]
+        pub extern "C" fn hrl_get_layouts() -> Vec<hotfnl::HotLayout> {
+          let mut list_layout: Vec<hotfnl::HotLayout> = vec![];
+          hotfnl::inventory::iter::<hot::HotLayout>().for_each(|l| {
+            list_layout.push(hotfnl::HotLayout {
+              file_name: l.file_name,
+              struct_name: l.struct_name,
+              hash: l.hash,
+            });
+          });
+          list_layout
+        }
         #(#attrs)*
         #[allow(dead_code)]
         #vis #sig {
@@ -85,7 +118,15 @@ pub fn hot_main(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 func: f.func,
               })
               .collect();
-            hotfnl::boot(#is_hot_project, list_fn, file!(), #env);
+            let list_layout: Vec<hotfnl::HotLayout> = hotfnl::inventory::iter::<hot::HotLayout>
+              .into_iter()
+              .map(|l| hotfnl::HotLayout {
+                file_name: l.file_name,
+                struct_name: l.struct_name,
+                hash: l.hash,
+              })
+              .collect();
+            hotfnl::boot(#is_hot_project, list_fn, list_layout, file!(), #env);
           }
           #body
         }
@@ -195,6 +236,51 @@ pub fn hot_fn(attr: TokenStream, item: TokenStream) -> TokenStream {
       }
     };
 
+    TokenStream::from(expanded)
+  }
+}
+
+/// Marks a struct so that any change to its layout quits the app on reload.
+///
+/// Fingerprints the struct's definition (fields, types, generics, attributes) with a
+/// compile-time hash. The boot-time baseline is compared against the reloaded library's
+/// fingerprints; a mismatch means the binary and library disagree on memory layout, so
+/// the app exits and the wrapper respawns a freshly built binary.
+///
+/// A no-op under the `prod` feature.
+#[proc_macro_attribute]
+pub fn hot_layout(_attr: TokenStream, item: TokenStream) -> TokenStream {
+  #[cfg(feature = "prod")]
+  {
+    let _ = _attr;
+    item
+  }
+
+  #[cfg(not(feature = "prod"))]
+  {
+    use quote::{ToTokens, quote};
+    use syn::{ItemStruct, parse_macro_input};
+    let input = parse_macro_input!(item as ItemStruct);
+    let struct_name = input.ident.to_token_stream().to_string();
+    let attr_str = input
+      .attrs
+      .iter()
+      .map(|a| a.to_token_stream().to_string())
+      .collect::<Vec<_>>()
+      .concat();
+    let mut core = input.clone();
+    core.attrs.clear();
+    let hash = fnv1a_64(&format!("{}::{}", attr_str, quote!(#core).to_string()));
+    let expanded = quote! {
+      #input
+      hotfnl::inventory::submit! {
+        crate::hot::HotLayout {
+          file_name: file!(),
+          struct_name: #struct_name,
+          hash: #hash,
+        }
+      }
+    };
     TokenStream::from(expanded)
   }
 }

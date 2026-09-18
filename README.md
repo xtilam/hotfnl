@@ -21,7 +21,7 @@ hot-swapped in place.
 | Feature   | Effect                                                                                                                                          |
 |-----------|-------------------------------------------------------------------------------------------------------------------------------------------------|
 | `default` | Enables all hot-reloading machinery: proc-macro expansion, file watcher, dynamic library loading, wrapper process, and the event system.        |
-| `prod`    | All proc macros (`#[hot_main]`, `#[hot_fn]`, `#[hot_impl]`, `#[hot_method]`) become pass-through no-ops, and the hot-reload runtime is not compiled at all. Zero runtime overhead. |
+| `prod`    | All proc macros (`#[hot_main]`, `#[hot_fn]`, `#[hot_impl]`, `#[hot_method]`, `#[hot_layout]`) become pass-through no-ops, and the hot-reload runtime is not compiled at all. Zero runtime overhead. |
 
 > [!NOTE]
 > When both `default` and `prod` are enabled, `prod` takes precedence by turning all
@@ -132,6 +132,7 @@ change.
 |-----------------------------------------------|-----------------------------------------------------------------|
 | `#[hot_main]`                                 | Wrap `main` to bootstrap the hot-reload system.                 |
 | `#[hot_fn]`                                   | Make a free function hot-patchable.                             |
+| `#[hot_layout]`                               | Mark a struct whose layout must stay stable; a changed layout quits the app. |
 | `#[hot_impl]` + `#[hot_method]`               | Make an associated method hot-patchable.                        |
 | `#[hot_check]`                                | Rewrite `#[dev]`/`#[prod]` attributes to proper `cfg` gates.   |
 | `hotfnl::run!()`                              | Start the hot-reload runtime.                                   |
