@@ -60,7 +60,6 @@ impl Counter {
         value: 0,
         string_view: CustomRender::new("Hello".to_string()),
         number_view: CustomRender::new(42),
-        hello: 0,
         #[dev]
         is_patching: false,
       },
