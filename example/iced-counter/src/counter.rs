@@ -72,7 +72,7 @@ impl Counter {
     hotfnl::use_local_event!(ngu, |_evt| {});
     match message {
       Message::Increment => {
-        self.value += 4;
+        self.value += 1;
       }
       Message::Decrement => {
         self.value -= 2;

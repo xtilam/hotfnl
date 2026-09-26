@@ -131,7 +131,10 @@ impl HotProject {
         });
       })
     };
-    write_file(&files::workspace::cargo_toml(self), toml::to_string(&cargo)?.as_str())?;
+    write_file(
+      &files::workspace::cargo_toml(self),
+      toml::to_string(&cargo)?.as_str(),
+    )?;
     write_file(
       &files::workspace::main_rs(self),
       "fn main() { println!(\"Hello, world!\"); }",
@@ -189,6 +192,8 @@ impl HotProject {
       .and_then(|v| v.get_mut("members"))
       .and_then(|v| v.is_array().then(|| *v = toml::Value::Array(vec![])));
 
+    let build_rs_path = self.root_dir.join("build.rs");
+
     if let Some(t) = cargo.as_table_mut() {
       let src_path = self.src_path.to_string_lossy();
       let lib = {
@@ -200,6 +205,12 @@ impl HotProject {
         );
         lib.insert("path".into(), src_path.to_string().into());
         lib.insert("name".into(), name.into());
+        if build_rs_path.exists() {
+          lib.insert(
+            "build".into(),
+            build_rs_path.to_string_lossy().to_string().into(),
+          );
+        }
         lib
       };
       let bin: toml::value::Array = vec![
@@ -214,8 +225,18 @@ impl HotProject {
           bin.insert("name".into(), files::wrapper::name(self).into());
           bin.insert(
             "path".into(),
-            files::wrapper::src_path(self).to_string_lossy().to_string().into(),
+            files::wrapper::src_path(self)
+              .to_string_lossy()
+              .to_string()
+              .into(),
           );
+
+          if build_rs_path.exists() {
+            bin.insert(
+              "build".into(),
+              build_rs_path.to_string_lossy().to_string().into(),
+            );
+          }
           bin.into()
         },
       ];
@@ -238,7 +259,6 @@ impl HotProject {
     std::fs::create_dir_all(files::workspace::cargo_config_dir(self))?;
     std::fs::create_dir_all(files::data_dir(self))?;
     std::fs::create_dir_all(&self.hot_dir)?;
-
     write_file(
       &files::workspace::cargo_config_file(self),
       format!(
@@ -246,14 +266,6 @@ impl HotProject {
         files::target_dir(self).parent().unwrap().to_string_lossy()
       )
       .as_str(),
-    )?;
-
-    write_file(
-      &self.hot_dir.join("build.rs"),
-      &format!(
-        r#"fn main() {{ println!("cargo:rustc-env=HOT_PROJECT_DIR={}"); }}"#,
-        self.root_dir.to_string_lossy()
-      ),
     )?;
 
     write_file(
@@ -319,6 +331,10 @@ impl HotProject {
     command
       .args(["build"])
       .args(&self.custom_args)
+      .env(
+        "HOT_PROJECT_DIR",
+        self.root_dir.to_string_lossy().to_string(),
+      )
       .current_dir(&self.hot_dir);
     command
   }
