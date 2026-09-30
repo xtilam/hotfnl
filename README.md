@@ -35,7 +35,7 @@ Add `hotfnl` to your dependencies (default features without `prod`):
 
 ```toml
 [dependencies]
-hotfnl = "0.1"
+hotfnl = "0.2"
 ```
 
 Annotate your `main` with `#[hot_main]` and the functions you want to hot-swap with
@@ -70,7 +70,7 @@ Add `hotfnl` as an **optional** dependency and expose it through feature flags:
 
 ```toml
 [dependencies]
-hotfnl = { version = "0.1", optional = true }
+hotfnl = { version = "0.2", optional = true }
 
 [features]
 default = ["hotfnl/default"]

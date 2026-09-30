@@ -331,6 +331,7 @@ pub fn hot_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     );
 
     let self_param: Pat = syn::parse_quote!(self);
+
     // let (_prefix, self_static) = {
     //   use proc_macro::TokenTree::*;
     //   use proc_macro::token_stream::IntoIter;
@@ -393,10 +394,16 @@ pub fn hot_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
       let syn::ImplItem::Fn(method) = item else {
         continue;
       };
-      let is_hot = method
-        .attrs
-        .iter()
-        .any(|attr| attr.path().is_ident("hot_method"));
+      let is_hot = method.attrs.iter().any(|attr| {
+        let segs = &attr.path().segments;
+        match segs.len() {
+          1 => segs[0].ident.eq("hot_method"),
+          2 => segs[0].ident.eq("hotfnl") && segs[1].ident.eq("hot_method"),
+          _ => false,
+        }
+        // println!("attr: {:?}", attr.path().get_ident());
+        // attr.path().is_ident("hot_method")
+      });
 
       if !is_hot {
         continue;
@@ -565,10 +572,11 @@ pub fn hot_check(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Marks an item as only being compiled in non-prod builds.
 #[proc_macro_attribute]
 pub fn dev(_attr: TokenStream, item: TokenStream) -> TokenStream {
-  use quote::{quote};
+  use quote::quote;
   let item = syn::parse_macro_input!(item as syn::Item);
   quote! {
     #[cfg(not(feature = "prod"))]
     #item
-  }.into()
+  }
+  .into()
 }

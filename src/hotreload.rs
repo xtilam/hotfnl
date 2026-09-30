@@ -18,7 +18,7 @@ mod wrapper;
 use std::{env::args, os::unix::process::CommandExt, process::Command, sync};
 
 use anyhow::Result;
-pub use event::{HotLibEvent, HotLibEvents as EventType};
+pub use event::{HotLibEvent, HotLibEventLocal, HotLibEvents as EventType};
 pub use hotfn::{HotFn, HotLayout};
 pub use hotlib::{HotLib, PatchErr, get_fn_idx, get_fn_list};
 pub use hotproject::HotProjectWatcherConfig;
