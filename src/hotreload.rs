@@ -11,14 +11,12 @@ mod fs_utils;
 mod hotfn;
 mod hotlib;
 mod hotproject;
-mod hotproject_server;
 mod macro_utils;
 mod wrapper;
 
 use std::{env::args, os::unix::process::CommandExt, process::Command, sync};
-
-use anyhow::Result;
-pub use event::{HotLibEvent, HotLibEventLocal, HotLibEvents as EventType};
+use std::io::Error;
+pub use event::{HotLibEvent, HotLibEventLocal, HotLibEvents};
 pub use hotfn::{HotFn, HotLayout};
 pub use hotlib::{HotLib, PatchErr, get_fn_idx, get_fn_list};
 pub use hotproject::HotProjectWatcherConfig;
@@ -52,7 +50,7 @@ pub fn get_events() -> sync::Arc<sync::RwLock<HotLibEvent>> {
 
 /// Starts the hot-reload runtime: scaffolds the hot project on first run, builds it,
 /// and spawns the background watcher loop.
-pub fn run() -> Result<()> {
+pub fn run() -> Result<(), Error> {
   if !HotLib::get_instance().is_hot_project {
     HotLib::get_instance().project.init_hot_project().unwrap();
     hot_run().unwrap();
@@ -62,7 +60,7 @@ pub fn run() -> Result<()> {
   Ok(())
 }
 
-fn hot_run() -> Result<()> {
+fn hot_run() -> Result<(), Error> {
   HotLib::get_instance()
     .project
     .rebuild_command()

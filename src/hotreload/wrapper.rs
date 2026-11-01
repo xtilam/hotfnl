@@ -10,8 +10,8 @@ use crate::hotreload::{
   macro_utils::bselect,
 };
 
-use anyhow::{Result, bail};
 use postcard::to_allocvec;
+use std::io::Error;
 use std::{
   os::unix::net::UnixDatagram,
   path::PathBuf,
@@ -32,10 +32,11 @@ pub struct HotProjectServer {
 }
 
 impl HotProjectServer {
-  pub fn new(data_path: &str) -> Result<Self> {
+  pub fn new(data_path: &str) -> Result<Self, Error> {
     let store = {
       let path = PathBuf::from(data_path);
-      toml::de::from_str::<HotProjectStoreData>(&std::fs::read_to_string(path)?)?
+      toml::de::from_str::<HotProjectStoreData>(&std::fs::read_to_string(path)?)
+        .map_err(Error::other)?
     };
     let mut watch_src = FileWatcher::new();
     watch_src.files = store.watch_src;
@@ -54,7 +55,7 @@ impl HotProjectServer {
     self.fd.send_to(data.as_slice(), &self.sock_path).ok()?;
     Some(())
   }
-  fn run(mut self) -> Result<()> {
+  fn run(mut self) -> Result<(), Error> {
     let (_, src_change_rx) = self.watch_src.new_channel();
     self.watch_src.run();
     println!(
@@ -107,7 +108,7 @@ impl HotProjectServer {
               child.kill().ok();
               child.wait().ok();
             };
-            bail!("{:?} changed", evt.paths);
+            return Err(Error::other(format!("{:?} changed", evt.paths)));
           };
         }],
         [recv(src_change_rx), |evt| {

@@ -63,3 +63,4 @@ prod = ["hotfnl-proc-macro/prod"]
 [profile.dev]
 debug = 0
 strip = true
+

@@ -18,7 +18,7 @@ macro_rules! run {
 macro_rules! use_event {
   ($($body: tt)*) => {
     hotfnl::if_hot! {{
-      use hotfnl::EventType::*;
+      use hotfnl::HotLibEvents::*;
       hotfnl::HotLibEvent::global($($body)*);
     }}
   };
@@ -45,7 +45,7 @@ macro_rules! watch {
 macro_rules! use_local_event {
   ($name:ident, $($body:tt)*) => {
     hotfnl::if_hot! {
-      use hotfnl::EventType::*;
+      use hotfnl::HotLibEvents::*;
       let $name = hotfnl::HotLibEvent::local($($body)*);
     }
   };

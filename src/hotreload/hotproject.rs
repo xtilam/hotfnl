@@ -104,9 +104,7 @@ impl HotProject {
           && v.is_str()
         {
           *v = toml::Value::String(
-            self
-              .workspace_dir
-              .join(v.as_str().unwrap())
+            clean_path(self.workspace_dir.join(v.as_str().unwrap()).as_path())
               .to_string_lossy()
               .to_string(),
           )
@@ -121,9 +119,7 @@ impl HotProject {
         item.1.get_mut("path").and_then(|v| {
           v.is_str().then(|| {
             *v = toml::Value::String(
-              self
-                .workspace_dir
-                .join(v.as_str().unwrap())
+              clean_path(self.workspace_dir.join(v.as_str().unwrap()).as_path())
                 .to_string_lossy()
                 .to_string(),
             )
@@ -157,9 +153,9 @@ impl HotProject {
         item.1.get_mut("path").and_then(|v| {
           v.is_str().then(|| {
             *v = toml::Value::String(
-              self
+              clean_path(self
                 .root_dir
-                .join(v.as_str().unwrap())
+                .join(v.as_str().unwrap()).as_path())
                 .to_string_lossy()
                 .to_string(),
             )
@@ -177,9 +173,7 @@ impl HotProject {
         item.1.get_mut("path").and_then(|v| {
           v.is_str().then(|| {
             *v = toml::Value::String(
-              self
-                .root_dir
-                .join(v.as_str().unwrap())
+              clean_path(self.root_dir.join(v.as_str().unwrap()).as_path())
                 .to_string_lossy()
                 .to_string(),
             )

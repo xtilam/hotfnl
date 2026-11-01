@@ -42,6 +42,8 @@ macro_rules! token_unwrap {
   }};
 }
 
+const IS_DEV: bool = cfg!(not(feature = "prod"));
+
 /// Wraps `main` to bootstrap the hot-reload system.
 ///
 /// Collects all `#[hot_fn]`-annotated functions, boots the engine, and runs the original
@@ -270,7 +272,7 @@ pub fn hot_layout(_attr: TokenStream, item: TokenStream) -> TokenStream {
       .concat();
     let mut core = input.clone();
     core.attrs.clear();
-    let hash = fnv1a_64(&format!("{}::{}", attr_str, quote!(#core).to_string()));
+    let hash = fnv1a_64(&format!("{}::{}", attr_str, quote!(#core)));
     let expanded = quote! {
       #input
       hotfnl::inventory::submit! {
@@ -546,9 +548,18 @@ pub fn hot_check(_attr: TokenStream, item: TokenStream) -> TokenStream {
   }
   impl Default for DevCleaner {
     fn default() -> Self {
-      DevCleaner {
-        dev: syn::parse_quote!(#[cfg(not(feature = "prod"))]),
-        prod: syn::parse_quote!(#[cfg(feature = "prod")]),
+      let allow = syn::parse_quote!(#[cfg(true)]);
+      let deny = syn::parse_quote!(#[cfg(false)]);
+      if IS_DEV {
+        Self {
+          dev: allow,
+          prod: deny,
+        }
+      } else {
+        Self {
+          dev: deny,
+          prod: allow,
+        }
       }
     }
   }
@@ -572,11 +583,20 @@ pub fn hot_check(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Marks an item as only being compiled in non-prod builds.
 #[proc_macro_attribute]
 pub fn dev(_attr: TokenStream, item: TokenStream) -> TokenStream {
-  use quote::quote;
-  let item = syn::parse_macro_input!(item as syn::Item);
-  quote! {
-    #[cfg(not(feature = "prod"))]
-    #item
-  }
-  .into()
+  #[cfg(feature = "prod")]
+  return quote::quote! {}.into();
+
+  #[cfg(not(feature = "prod"))]
+  return item;
+}
+
+#[allow(unused)]
+#[proc_macro_attribute]
+pub fn prod(_attr: TokenStream, item: TokenStream) -> TokenStream {
+
+  #[cfg(feature = "prod")]
+  return item;
+
+  #[cfg(not(feature = "prod"))]
+  return quote::quote! {}.into();
 }

@@ -1,8 +1,8 @@
 //! Core hot-reload engine: library loading, function pointer patching, and the watch
 //! loop that drives reloads.
 
-use anyhow::Result;
 use postcard::from_bytes;
+use std::io::Error;
 use std::{
   collections::BTreeMap,
   os::unix::net::UnixDatagram,
@@ -201,8 +201,8 @@ impl HotLib {
   }
 
   /// Sends an action to the background watch loop.
-  pub fn trigger(&self, action: HotLibAction) -> Result<()> {
-    self.tx.send(action)?;
+  pub fn trigger(&self, action: HotLibAction) -> Result<(), Error> {
+    self.tx.send(action).map_err(Error::other)?;
     Ok(())
   }
 
@@ -246,9 +246,8 @@ impl HotLib {
     // Layout fingerprint check: a changed struct layout (`#[hot_layout]`) means the
     // binary and the library disagree on memory layout, so require a full restart. Old
     // libraries without `hrl_get_layouts` are exempt from the check.
-    let get_layouts = unsafe {
-      lib.get::<unsafe extern "C" fn() -> Vec<HotLayout>>(b"hrl_get_layouts")
-    };
+    let get_layouts =
+      unsafe { lib.get::<unsafe extern "C" fn() -> Vec<HotLayout>>(b"hrl_get_layouts") };
     if let Ok(get_layouts) = get_layouts {
       let list_layout = unsafe { get_layouts() };
       let mut map_layout = self.layout_dict.clone();
