@@ -14,19 +14,22 @@ mod hotproject;
 mod macro_utils;
 mod wrapper;
 
-use std::{env::args, os::unix::process::CommandExt, process::Command, sync};
-use std::io::Error;
 pub use event::{HotLibEvent, HotLibEventLocal, HotLibEvents};
 pub use hotfn::{HotFn, HotLayout};
 pub use hotlib::{HotLib, PatchErr, get_fn_idx, get_fn_list};
 pub use hotproject::HotProjectWatcherConfig;
+use std::io::Error;
+use std::{env::args, os::unix::process::CommandExt, process::Command, sync};
 pub use wrapper::*;
 
 pub fn add_cargo_args(args: impl IntoIterator<Item = impl Into<String>>) {
-  let projects = &mut HotLib::get_instance_mut().project;
-  args.into_iter().for_each(|s| {
-    projects.custom_args.push(s.into());
-  })
+  #[cfg(debug_assertions)]
+  {
+    let projects = &mut HotLib::get_instance_mut().project;
+    args.into_iter().for_each(|s| {
+      projects.custom_args.push(s.into());
+    })
+  }
 }
 
 /// Boots the hot-reload system with the set of hot-swappable functions gathered from
@@ -40,35 +43,42 @@ pub fn boot(
   file_name: &str,
   project_dir: &str,
 ) {
+  #[cfg(debug_assertions)]
   HotLib::get_instance_mut().on_boot(is_hot_project, fns, layouts, file_name, project_dir);
 }
 
 /// Returns the shared event registry, used to register lifecycle callbacks.
 pub fn get_events() -> sync::Arc<sync::RwLock<HotLibEvent>> {
+  #[cfg(debug_assertions)]
   HotLib::get_instance().event.clone()
 }
 
 /// Starts the hot-reload runtime: scaffolds the hot project on first run, builds it,
 /// and spawns the background watcher loop.
 pub fn run() -> Result<(), Error> {
-  if !HotLib::get_instance().is_hot_project {
-    HotLib::get_instance().project.init_hot_project().unwrap();
-    hot_run().unwrap();
+  #[cfg(debug_assertions)]
+  {
+    if !HotLib::get_instance().is_hot_project {
+      HotLib::get_instance().project.init_hot_project().unwrap();
+      hot_run().unwrap();
+    }
+    HotLib::get_instance_mut().run_watch_lib();
   }
-  HotLib::get_instance_mut().run_watch_lib();
-
   Ok(())
 }
 
 fn hot_run() -> Result<(), Error> {
-  HotLib::get_instance()
-    .project
-    .rebuild_command()
-    .spawn()?
-    .wait()?;
+  #[cfg(debug_assertions)]
+  {
+    HotLib::get_instance()
+      .project
+      .rebuild_command()
+      .spawn()?
+      .wait()?;
 
-  let _ = Command::new(files::wrapper::bin_path(&HotLib::get_instance().project))
-    .args(args())
-    .exec();
+    let _ = Command::new(files::wrapper::bin_path(&HotLib::get_instance().project))
+      .args(args())
+      .exec();
+  }
   Ok(())
 }

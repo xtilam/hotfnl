@@ -69,7 +69,6 @@ impl Counter {
 
   #[hot_method]
   pub fn update(&mut self, message: Message) {
-    hotfnl::use_local_event!(ngu, |_evt| {});
     match message {
       Message::Increment => {
         self.value += 1;
@@ -102,7 +101,7 @@ impl Counter {
     let number = self.number_view.view();
     column![
       button("Increment").on_press(Message::Increment),
-      text(self.value).size(20),
+      text(self.value).size(40),
       button("Decrement").on_press(Message::Decrement),
       str,
       number,

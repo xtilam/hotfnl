@@ -43,7 +43,7 @@ impl RComponent for App {
         tx.send(TuiAppAction::ReRender).ok();
       }
       (Left, _) => {
-        self.counter -= 2;
+        self.counter -= 1;
         tx.send(TuiAppAction::ReRender).ok();
       }
       (Right, _) => {
@@ -60,7 +60,7 @@ impl RComponent for App {
     let size = frame.area();
     let block = Block::default()
       .title(
-        Span::from(format!("Counter {}", 123))
+        Span::from(format!("Counter {}", 1))
           .bold()
           .underlined()
           .fg(Color::Yellow),

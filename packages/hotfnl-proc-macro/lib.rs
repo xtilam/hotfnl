@@ -11,7 +11,7 @@ use proc_macro::TokenStream;
 ///
 /// Deterministic across compilations so the boot-time baseline and the reloaded
 /// library's hash can be compared.
-#[cfg(not(feature = "prod"))]
+#[cfg(debug_assertions)]
 fn fnv1a_64(input: &str) -> u64 {
   let mut hash: u64 = 0xcbf29ce484222325;
   for byte in input.as_bytes() {
@@ -21,7 +21,7 @@ fn fnv1a_64(input: &str) -> u64 {
   hash
 }
 
-#[cfg(not(feature = "prod"))]
+#[cfg(debug_assertions)]
 macro_rules! token_err {
   ($($el:tt)*) => {
     syn::Error::new_spanned($($el)*)
@@ -30,7 +30,7 @@ macro_rules! token_err {
   };
 }
 
-#[cfg(not(feature = "prod"))]
+#[cfg(debug_assertions)]
 macro_rules! token_unwrap {
   ($value: expr, |$name: ident| $take: expr, $err: literal) => {{
     let $name = $value;
@@ -42,7 +42,7 @@ macro_rules! token_unwrap {
   }};
 }
 
-const IS_DEV: bool = cfg!(not(feature = "prod"));
+const IS_DEV: bool = cfg!(debug_assertions);
 
 /// Wraps `main` to bootstrap the hot-reload system.
 ///
@@ -50,9 +50,9 @@ const IS_DEV: bool = cfg!(not(feature = "prod"));
 /// body. A no-op under the `prod` feature.
 #[proc_macro_attribute]
 pub fn hot_main(_attr: TokenStream, item: TokenStream) -> TokenStream {
-  #[cfg(feature = "prod")]
+  #[cfg(not(debug_assertions))]
   return item;
-  #[cfg(not(feature = "prod"))]
+  #[cfg(debug_assertions)]
   {
     use proc_macro::TokenStream;
     use quote::quote;
@@ -143,13 +143,13 @@ pub fn hot_main(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// letting its implementation be swapped at runtime. A no-op under the `prod` feature.
 #[proc_macro_attribute]
 pub fn hot_fn(attr: TokenStream, item: TokenStream) -> TokenStream {
-  #[cfg(feature = "prod")]
+  #[cfg(not(debug_assertions))]
   {
     let _ = attr;
     item
   }
 
-  #[cfg(not(feature = "prod"))]
+  #[cfg(debug_assertions)]
   {
     use proc_macro::TokenStream;
     use quote::quote;
@@ -252,13 +252,13 @@ pub fn hot_fn(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// A no-op under the `prod` feature.
 #[proc_macro_attribute]
 pub fn hot_layout(_attr: TokenStream, item: TokenStream) -> TokenStream {
-  #[cfg(feature = "prod")]
+  #[cfg(not(debug_assertions))]
   {
     let _ = _attr;
     item
   }
 
-  #[cfg(not(feature = "prod"))]
+  #[cfg(debug_assertions)]
   {
     use quote::{ToTokens, quote};
     use syn::{ItemStruct, parse_macro_input};
@@ -293,13 +293,13 @@ pub fn hot_layout(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// hot function table. A no-op under the `prod` feature.
 #[proc_macro_attribute]
 pub fn hot_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
-  #[cfg(feature = "prod")]
+  #[cfg(not(debug_assertions))]
   {
     let _attr = attr;
     item
   }
 
-  #[cfg(not(feature = "prod"))]
+  #[cfg(debug_assertions)]
   {
     use proc_macro::Span;
     use proc_macro2::TokenStream as TokenStream2;
@@ -583,20 +583,22 @@ pub fn hot_check(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Marks an item as only being compiled in non-prod builds.
 #[proc_macro_attribute]
 pub fn dev(_attr: TokenStream, item: TokenStream) -> TokenStream {
-  #[cfg(feature = "prod")]
-  return quote::quote! {}.into();
+  #[cfg(not(debug_assertions))]
+  {
+    let _ = item;
+    return quote::quote! {}.into();
+  }
 
-  #[cfg(not(feature = "prod"))]
+  #[cfg(debug_assertions)]
   return item;
 }
 
 #[allow(unused)]
 #[proc_macro_attribute]
 pub fn prod(_attr: TokenStream, item: TokenStream) -> TokenStream {
-
-  #[cfg(feature = "prod")]
+  #[cfg(not(debug_assertions))]
   return item;
 
-  #[cfg(not(feature = "prod"))]
+  #[cfg(debug_assertions)]
   return quote::quote! {}.into();
 }

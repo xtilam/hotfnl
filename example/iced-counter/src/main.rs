@@ -18,7 +18,8 @@ pub fn main() -> iced::Result {
       };
       fn callback() -> impl Stream<Item = Message> {
         stream::channel(100, async |mut output| {
-          let (sender, mut receiver) = mpsc::unbounded::<hotfnl::EventType>();
+          use hotfnl::HotLibEvents::*;
+          let (sender, mut receiver) = mpsc::unbounded::<hotfnl::HotLibEvents>();
           hotfnl::use_local_event!(event_ptr, {
             let sender = sender.clone();
             move |event| {
@@ -38,7 +39,6 @@ pub fn main() -> iced::Result {
       Subscription::run(callback)
     });
   }];
-  // if_hot!();
   app.run()?;
   Ok(())
 }
